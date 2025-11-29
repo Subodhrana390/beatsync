@@ -82,6 +82,24 @@ The app includes an Audio Output Selector that allows you to choose any audio ou
 - HTTPS connection (required for Web Bluetooth, if using Bluetooth features)
 - Multiple devices (phones/tablets/computers) - Bluetooth speakers are optional
 
+## Deployment
+
+### Quick Deploy to Vercel
+
+1. **Deploy Sync Server** (Railway/Render/Heroku):
+   - Deploy `server/` directory to a hosting service that supports WebSockets
+   - Copy the server URL
+
+2. **Deploy Next.js App to Vercel**:
+   - Push code to GitHub
+   - Import project in Vercel dashboard
+   - Add environment variables:
+     - `NEXT_PUBLIC_YOUTUBE_API_KEY`
+     - `NEXT_PUBLIC_SOCKET_URL` (your sync server URL)
+   - Deploy!
+
+📖 **Full deployment guide**: See [VERCEL_DEPLOYMENT.md](./VERCEL_DEPLOYMENT.md)
+
 ## Tech Stack
 
 - Next.js 14
