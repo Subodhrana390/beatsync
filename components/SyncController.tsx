@@ -141,11 +141,16 @@ export default function SyncController({
 
   const startSync = () => {
     if (socket && videoId) {
+      // Always start sync with playing=true to ensure video starts
       socket.emit('startSync', {
         videoId,
         time: syncTime,
-        isPlaying,
+        isPlaying: true, // Force playing state for sync start
       })
+      // Also update local state to start playing
+      if (onPlayStateChange) {
+        onPlayStateChange(true)
+      }
     }
   }
 
@@ -160,8 +165,12 @@ export default function SyncController({
       socket.emit('syncAll', {
         videoId,
         time: syncTime,
-        isPlaying,
+        isPlaying: true, // Force playing state for sync all
       })
+      // Also update local state to start playing
+      if (onPlayStateChange) {
+        onPlayStateChange(true)
+      }
     }
   }
 

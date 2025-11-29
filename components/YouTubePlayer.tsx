@@ -1,286 +1,432 @@
-'use client'
+"use client";
 
-import { useState, useEffect, useRef } from 'react'
-import YouTube from 'youtube-player'
-import { isMobileDevice } from '@/lib/mobileUtils'
-import styles from './YouTubePlayer.module.css'
+import React, { useEffect, useRef, useState } from "react";
+import styles from "./YouTubePlayer.module.css";
+import { isMobileDevice } from "@/lib/mobileUtils";
 
-interface YouTubePlayerProps {
-  videoId: string | null
-  isPlaying: boolean
-  syncTime: number
-  onVideoChange: (videoId: string | null) => void
-  onPlayStateChange: (isPlaying: boolean) => void
-  onTimeUpdate: (time: number) => void
+interface Props {
+  videoId: string | null;
+  isPlaying: boolean;
+  syncTime: number;
+  onVideoChange: (id: string | null) => void;
+  onPlayStateChange: (playing: boolean) => void;
+  onTimeUpdate: (time: number) => void;
 }
 
-export default function YouTubePlayerComponent({
+export default function YouTubePlayer({
   videoId,
   isPlaying,
   syncTime,
   onVideoChange,
   onPlayStateChange,
   onTimeUpdate,
-}: YouTubePlayerProps) {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<any[]>([])
-  const [isSearching, setIsSearching] = useState(false)
-  const [playerReady, setPlayerReady] = useState(false)
-  const [playerError, setPlayerError] = useState<string | null>(null)
-  const playerRef = useRef<HTMLDivElement>(null)
-  const youtubePlayerRef = useRef<any>(null)
+}: Props) {
+  // DOM refs
+  const ytHolderRef = useRef<HTMLDivElement | null>(null);
+  const playerRef = useRef<any>(null);
 
-  useEffect(() => {
-    // Initialize player even if no videoId yet
-    if (playerRef.current && !youtubePlayerRef.current) {
-      try {
-        // Detect mobile device
-        const isMobile = isMobileDevice()
-        
-        youtubePlayerRef.current = YouTube(playerRef.current, {
-          width: '100%',
-          height: isMobile ? '250' : '315',
-          playerVars: {
-            autoplay: 0,
-            controls: 1,
-            modestbranding: 1,
-            playsinline: 1, // Important for iOS
-            rel: 0,
-            fs: 1,
-            cc_load_policy: 0,
-            iv_load_policy: 3,
-            enablejsapi: 1,
-          },
-        })
+  // Audio unlock ref
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const didGesture = useRef(false);
 
-      // Wait for player to be ready
-      youtubePlayerRef.current.on('ready', () => {
-        console.log('YouTube player ready')
-        setPlayerReady(true)
-        setPlayerError(null)
-      })
+  // Polling
+  const pollRef = useRef<number | null>(null);
 
-      youtubePlayerRef.current.on('error', (event: any) => {
-        console.error('YouTube player error:', event)
-        setPlayerError('Failed to load video. Please try another video.')
-      })
+  // UI State
+  const [playerReady, setPlayerReady] = useState(false);
+  const [playerError, setPlayerError] = useState<string | null>(null);
+  const [fallback, setFallback] = useState(false);
 
-      youtubePlayerRef.current.on('stateChange', (event: any) => {
-        const state = event.data
-        console.log('YouTube player state:', state)
-        // State 1 = playing, 2 = paused, 0 = ended, 3 = buffering, 5 = cued
-        if (state === 1) {
-          onPlayStateChange(true)
-        } else if (state === 0 || state === 2) {
-          onPlayStateChange(false)
-        }
-      })
+  // Track info
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(100);
+  const [muted, setMuted] = useState(false);
 
-      // Update time periodically
-      const timeInterval = setInterval(async () => {
-        if (youtubePlayerRef.current) {
-          try {
-            const currentTime = await youtubePlayerRef.current.getCurrentTime()
-            onTimeUpdate(currentTime)
-          } catch (error) {
-            // Ignore errors
-          }
-        }
-      }, 1000)
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
 
-        return () => {
-          clearInterval(timeInterval)
-          if (youtubePlayerRef.current) {
-            youtubePlayerRef.current.destroy()
-            youtubePlayerRef.current = null
-            setPlayerReady(false)
-          }
-        }
-      } catch (error: any) {
-        console.error('Error initializing YouTube player:', error)
-        setPlayerError('Failed to initialize YouTube player. Please refresh the page.')
-      }
-    }
-  }, [onPlayStateChange, onTimeUpdate])
+  // Metadata
+  const [nowTitle, setNowTitle] = useState<string | null>(null);
+  const [nowChannel, setNowChannel] = useState<string | null>(null);
+  const [nowThumb, setNowThumb] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (youtubePlayerRef.current && videoId && playerReady) {
-      console.log('Loading video:', videoId)
-      youtubePlayerRef.current.loadVideoById(videoId).catch((error: any) => {
-        console.error('Error loading video:', error)
-        setPlayerError('Failed to load video. Please try again.')
-      })
-    } else if (youtubePlayerRef.current && videoId && !playerReady) {
-      // Wait for player to be ready
-      const checkReady = setInterval(() => {
-        if (playerReady && youtubePlayerRef.current) {
-          clearInterval(checkReady)
-          youtubePlayerRef.current.loadVideoById(videoId).catch((error: any) => {
-            console.error('Error loading video:', error)
-            setPlayerError('Failed to load video. Please try again.')
-          })
-        }
-      }, 100)
-      return () => clearInterval(checkReady)
-    }
-  }, [videoId, playerReady])
+  const format = (s: number) => {
+    if (!isFinite(s) || s <= 0) return "0:00";
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2, "0")}`;
+  };
 
-  useEffect(() => {
-    if (youtubePlayerRef.current && playerReady && videoId) {
-      if (isPlaying) {
-        console.log('Playing video')
-        youtubePlayerRef.current.playVideo().catch((error: any) => {
-          console.error('Error playing video:', error)
-          // Autoplay might be blocked - show message
-          if (error.message?.includes('autoplay') || error.message?.includes('play')) {
-            setPlayerError('Autoplay blocked. Please click play on the video player.')
-          }
-        })
-      } else {
-        console.log('Pausing video')
-        youtubePlayerRef.current.pauseVideo().catch((error: any) => {
-          console.error('Error pausing video:', error)
-        })
-      }
-    }
-  }, [isPlaying, playerReady, videoId])
-
-  useEffect(() => {
-    if (youtubePlayerRef.current && syncTime > 0) {
-      youtubePlayerRef.current.seekTo(syncTime, true)
-    }
-  }, [syncTime])
-
-  const searchYouTube = async () => {
-    if (!searchQuery.trim()) return
-
-    setIsSearching(true)
+  // --------------------------------------------------------------------
+  // AUDIO UNLOCK
+  // --------------------------------------------------------------------
+  const unlockAudio = async () => {
     try {
-      // Using YouTube Data API v3
-      const API_KEY = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY || 'YOUR_API_KEY'
+      const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!Ctx) return;
 
-      if (API_KEY === 'YOUR_API_KEY') {
-        alert('Please configure your YouTube API key in .env.local file. See README for instructions.')
-        setIsSearching(false)
-        return
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new Ctx();
       }
 
-      const response = await fetch(
-        `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(
-          searchQuery
-        )}&type=video&maxResults=10&key=${API_KEY}`
-      )
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error?.message || 'Failed to search YouTube')
+      if (audioCtxRef.current.state === "suspended") {
+        await audioCtxRef.current.resume();
       }
 
-      const data = await response.json()
-      setSearchResults(data.items || [])
-    } catch (error: any) {
-      console.error('Error searching YouTube:', error)
-      alert(`Error searching YouTube: ${error.message || 'Please check your API key and try again.'}`)
-      setSearchResults([])
-    } finally {
-      setIsSearching(false)
-    }
-  }
+      console.log("🔊 AudioContext:", audioCtxRef.current.state);
+    } catch {}
+  };
 
-  const selectVideo = (video: any) => {
-    const id = video.id.videoId
-    onVideoChange(id)
-    setSearchQuery('')
-    setSearchResults([])
-    setPlayerError(null)
-  }
+  // --------------------------------------------------------------------
+  // YOUTUBE API LOADER (CORRECT AND GUARANTEED)
+  // --------------------------------------------------------------------
+  const loadYouTubeAPI = (): Promise<void> => {
+    return new Promise((resolve) => {
+      // Already available?
+      if (window.YT && window.YT.Player) {
+        resolve();
+        return;
+      }
 
-  const handleManualPlay = async () => {
-    if (youtubePlayerRef.current && videoId) {
+      // Create script tag only once
+      if (!document.getElementById("yt-iframe-api")) {
+        const tag = document.createElement("script");
+        tag.id = "yt-iframe-api";
+        tag.src = "https://www.youtube.com/iframe_api";
+        document.body.appendChild(tag);
+      }
+
+      // YouTube calls this when ready
+      (window as any).onYouTubeIframeAPIReady = () => {
+        resolve();
+      };
+    });
+  };
+
+  // --------------------------------------------------------------------
+  // CREATE PLAYER (ONLY AFTER API READY)
+  // --------------------------------------------------------------------
+  const createPlayer = () => {
+    if (!ytHolderRef.current) return;
+
+    const height = isMobileDevice() ? 260 : 360;
+
+    playerRef.current = new window.YT.Player(ytHolderRef.current, {
+      width: "100%",
+      height,
+      playerVars: {
+        autoplay: 0,
+        controls: 1,
+        modestbranding: 1,
+        playsinline: 1,
+        rel: 0,
+      },
+      events: {
+        onReady: (e: any) => {
+          setPlayerReady(true);
+          e.target.setVolume(100);
+          e.target.unMute();
+          setMuted(false);
+        },
+        onStateChange: (e: any) => {
+          const S = window.YT.PlayerState;
+          if (e.data === S.PLAYING) onPlayStateChange(true);
+          if (e.data === S.PAUSED || e.data === S.ENDED) onPlayStateChange(false);
+          if (e.data === S.CUED) updateDuration();
+        },
+        onError: () => {
+          setPlayerError("Video not playable.");
+          setFallback(true);
+        },
+      },
+    });
+
+    startPolling();
+  };
+
+  // --------------------------------------------------------------------
+  // GESTURE INITIALIZER (audio unlock → load YT → create player)
+  // --------------------------------------------------------------------
+  const initOnGesture = () => {
+    if (didGesture.current) return;
+
+    const handler = async () => {
+      didGesture.current = true;
+      window.removeEventListener("click", handler);
+      window.removeEventListener("touchstart", handler);
+
+      await unlockAudio(); // 1️⃣ unlock audio
+      await loadYouTubeAPI(); // 2️⃣ load YT API
+      createPlayer(); // 3️⃣ create player
+    };
+
+    window.addEventListener("click", handler, { passive: true });
+    window.addEventListener("touchstart", handler, { passive: true });
+  };
+
+  // --------------------------------------------------------------------
+  // POLLING
+  // --------------------------------------------------------------------
+  const startPolling = () => {
+    stopPolling();
+    pollRef.current = window.setInterval(() => {
+      if (!playerReady || !playerRef.current) return;
+
+      const t = playerRef.current.getCurrentTime?.();
+      const d = playerRef.current.getDuration?.();
+
+      if (typeof t === "number") {
+        setCurrentTime(t);
+        onTimeUpdate(t);
+      }
+
+      if (typeof d === "number" && d > 0) {
+        setDuration(d);
+      }
+    }, 700);
+  };
+
+  const stopPolling = () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = null;
+  };
+
+  // --------------------------------------------------------------------
+  // PLAYER ACTIONS (correct order)
+  // --------------------------------------------------------------------
+  const safePlay = async () => {
+    await unlockAudio();
+
+    try {
+      playerRef.current?.unMute();
+      playerRef.current?.setVolume(100);
+      setMuted(false);
+
+      playerRef.current?.playVideo();
+    } catch {}
+  };
+
+  const safePause = () => {
+    playerRef.current?.pauseVideo?.();
+  };
+
+  const safeSeek = (sec: number) => {
+    playerRef.current?.seekTo?.(Math.max(0, sec), true);
+  };
+
+  const updateDuration = () => {
+    try {
+      const d = playerRef.current?.getDuration?.();
+      if (d && d > 0) setDuration(d);
+    } catch {}
+  };
+
+  const safeLoad = (id: string) => {
+    if (!playerReady || !playerRef.current) return;
+
+    playerRef.current.loadVideoById(id);
+
+    setTimeout(() => {
       try {
-        await youtubePlayerRef.current.playVideo()
-        onPlayStateChange(true)
-      } catch (error: any) {
-        console.error('Manual play error:', error)
-        setPlayerError('Could not play video. Please check your internet connection and try again.')
-      }
-    }
-  }
+        playerRef.current.pauseVideo();
+      } catch {}
+    }, 150);
+  };
 
+  // --------------------------------------------------------------------
+  // SEARCH
+  // --------------------------------------------------------------------
+  const searchYouTube = async () => {
+    const q = searchQuery.trim();
+    if (!q) return;
+
+    setSearching(true);
+    setSearchResults([]);
+
+    try {
+      const KEY = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY || "";
+      if (!KEY) {
+        alert("NEXT_PUBLIC_YOUTUBE_API_KEY missing");
+        return;
+      }
+
+      const url =
+        `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=10&q=${encodeURIComponent(q)}&key=${KEY}`;
+
+      const r = await fetch(url);
+      const data = await r.json();
+      setSearchResults(data.items || []);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const selectResult = (item: any) => {
+    const id = item?.id?.videoId;
+    if (!id) return;
+
+    setNowTitle(item.snippet.title);
+    setNowChannel(item.snippet.channelTitle);
+    setNowThumb(item.snippet.thumbnails?.high?.url);
+
+    onVideoChange(id);
+    setSearchResults([]);
+    setSearchQuery("");
+
+    setTimeout(() => safeLoad(id), 200);
+  };
+
+  // --------------------------------------------------------------------
+  // EFFECTS
+  // --------------------------------------------------------------------
+  useEffect(() => {
+    initOnGesture();
+    return () => playerRef.current?.destroy?.();
+  }, []);
+
+  useEffect(() => {
+    if (videoId && playerReady) safeLoad(videoId);
+  }, [videoId, playerReady]);
+
+  useEffect(() => {
+    if (!playerReady) return;
+    if (isPlaying) safePlay();
+    else safePause();
+  }, [isPlaying, playerReady]);
+
+  useEffect(() => {
+    if (playerReady && syncTime > 0) safeSeek(syncTime);
+  }, [syncTime]);
+
+  const thumb =
+    nowThumb || (videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null);
+
+  // --------------------------------------------------------------------
+  // RENDER
+  // --------------------------------------------------------------------
   return (
     <div className={styles.container}>
-      <div className={styles.searchSection}>
-        <div className={styles.searchBox}>
-          <input
-            type="text"
-            placeholder="Search for music on YouTube..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyPress={(e: React.KeyboardEvent) => e.key === 'Enter' && searchYouTube()}
-            className={styles.searchInput}
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck="false"
-          />
-          <button onClick={searchYouTube} disabled={isSearching} className={styles.searchButton}>
-            {isSearching ? 'Searching...' : 'Search'}
-          </button>
+      {/* NOW PLAYING */}
+      <div className={styles.nowPlayingCard}>
+        <div className={styles.artwork}>
+          {thumb ? (
+            <img src={thumb} className={styles.artImg} />
+          ) : (
+            <div className={styles.artPlaceholder}>🎵</div>
+          )}
         </div>
 
-        {searchResults.length > 0 && (
-          <div className={styles.results}>
-            <h4>Search Results:</h4>
-            <ul className={styles.resultsList}>
-              {searchResults.map((video: any) => (
-                <li key={video.id.videoId} className={styles.resultItem} onClick={() => selectVideo(video)}>
-                  <img
-                    src={video.snippet.thumbnails.default.url}
-                    alt={video.snippet.title}
-                    className={styles.thumbnail}
-                  />
-                  <div className={styles.resultInfo}>
-                    <div className={styles.resultTitle}>{video.snippet.title}</div>
-                    <div className={styles.resultChannel}>{video.snippet.channelTitle}</div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+        <div className={styles.info}>
+          <div className={styles.title}>{nowTitle || "No track selected"}</div>
+          <div className={styles.channel}>{nowChannel || "Search YouTube Music"}</div>
+
+          <div className={styles.controlsRow}>
+            <button
+              disabled={!playerReady}
+              className={styles.playPauseBtn}
+              onClick={() => onPlayStateChange(!isPlaying)}
+            >
+              {isPlaying ? "⏸" : "▶"}
+            </button>
+
+            <div className={styles.seekGroup}>
+              <button disabled={!playerReady} onClick={() => safeSeek(currentTime - 10)}>
+                -10s
+              </button>
+              <button disabled={!playerReady} onClick={() => safeSeek(currentTime + 10)}>
+                +10s
+              </button>
+            </div>
+
+            <div className={styles.timeText}>
+              {format(currentTime)} / {format(duration)}
+            </div>
           </div>
-        )}
+
+          <div className={styles.volumeRow}>
+            <button disabled={!playerReady} onClick={() => {
+              if (muted) {
+                playerRef.current?.unMute();
+                setMuted(false);
+              } else {
+                playerRef.current?.mute();
+                setMuted(true);
+              }
+            }}>
+              {muted ? "🔇" : "🔊"}
+            </button>
+
+            <input
+              type="range"
+              min={0}
+              max={100}
+              disabled={!playerReady}
+              value={volume}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setVolume(v);
+                playerRef.current?.setVolume(v);
+                if (v > 0) {
+                  playerRef.current?.unMute();
+                  setMuted(false);
+                }
+              }}
+            />
+            <span>{volume}%</span>
+          </div>
+        </div>
       </div>
 
-      <div className={styles.playerSection}>
+      {/* SEARCH */}
+      <div className={styles.searchBar}>
+        <input
+          className={styles.searchInput}
+          placeholder="Search YouTube Music…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && searchYouTube()}
+        />
+        <button className={styles.searchBtn} onClick={searchYouTube}>
+          {searching ? "…" : "Search"}
+        </button>
+      </div>
+
+      {/* RESULTS */}
+      {searchResults.length > 0 && (
+        <div className={styles.results}>
+          {searchResults.map((item) => (
+            <div
+              key={item.id.videoId}
+              className={styles.resultItem}
+              onClick={() => selectResult(item)}
+            >
+              <img
+                src={item.snippet.thumbnails?.medium?.url}
+                className={styles.resultThumb}
+              />
+              <div>
+                <div className={styles.resultTitle}>{item.snippet.title}</div>
+                <div className={styles.resultChannel}>{item.snippet.channelTitle}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* PLAYER */}
+      <div className={styles.playerArea}>
+        <div ref={ytHolderRef} className={styles.iframeHolder} />
+
         {playerError && (
-          <div className={styles.errorMessage}>
-            <p>⚠️ {playerError}</p>
-            <button onClick={() => setPlayerError(null)} className={styles.dismissButton}>
-              Dismiss
-            </button>
-          </div>
-        )}
-        {/* Always render player container for initialization */}
-        <div ref={playerRef} className={styles.player} style={{ display: videoId ? 'block' : 'none' }}></div>
-        {!videoId && (
-          <div className={styles.placeholder}>
-            <p>🎵 Search and select a video to start playing</p>
-          </div>
-        )}
-        {videoId && !playerReady && (
-          <div className={styles.loadingMessage}>
-            <p>Loading player...</p>
-          </div>
-        )}
-        {videoId && playerReady && !isPlaying && (
-          <div className={styles.playHint}>
-            <p>💡 Click the play button on the video player to start playback</p>
-            <button onClick={handleManualPlay} className={styles.manualPlayButton}>
-              ▶️ Play Video
-            </button>
+          <div className={styles.playerError}>
+            ⚠ {playerError}
+            <button onClick={() => setPlayerError(null)}>Dismiss</button>
           </div>
         )}
       </div>
     </div>
-  )
+  );
 }
-
