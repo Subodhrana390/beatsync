@@ -44,12 +44,15 @@ export default function SyncController({
       socketRef.current = null
     }
 
-    // Initialize Socket.io connection
+    // Initialize Socket.io connection with mobile-friendly settings
     const newSocket = io(url, {
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'], // Try polling first for mobile
       reconnection: true,
       reconnectionDelay: 1000,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: 10,
+      timeout: 20000,
+      forceNew: false,
+      upgrade: true,
     })
 
     newSocket.on('connect', () => {

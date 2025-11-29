@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import YouTube from 'youtube-player'
+import { isMobileDevice } from '@/lib/mobileUtils'
 import styles from './YouTubePlayer.module.css'
 
 interface YouTubePlayerProps {
@@ -24,23 +25,50 @@ export default function YouTubePlayerComponent({
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [isSearching, setIsSearching] = useState(false)
+  const [playerReady, setPlayerReady] = useState(false)
+  const [playerError, setPlayerError] = useState<string | null>(null)
   const playerRef = useRef<HTMLDivElement>(null)
   const youtubePlayerRef = useRef<any>(null)
 
   useEffect(() => {
+    // Initialize player even if no videoId yet
     if (playerRef.current && !youtubePlayerRef.current) {
-      youtubePlayerRef.current = YouTube(playerRef.current, {
-        width: '100%',
-        height: '315',
-        playerVars: {
-          autoplay: 0,
-          controls: 1,
-          modestbranding: 1,
-        },
+      try {
+        // Detect mobile device
+        const isMobile = isMobileDevice()
+        
+        youtubePlayerRef.current = YouTube(playerRef.current, {
+          width: '100%',
+          height: isMobile ? '250' : '315',
+          playerVars: {
+            autoplay: 0,
+            controls: 1,
+            modestbranding: 1,
+            playsinline: 1, // Important for iOS
+            rel: 0,
+            fs: 1,
+            cc_load_policy: 0,
+            iv_load_policy: 3,
+            enablejsapi: 1,
+          },
+        })
+
+      // Wait for player to be ready
+      youtubePlayerRef.current.on('ready', () => {
+        console.log('YouTube player ready')
+        setPlayerReady(true)
+        setPlayerError(null)
+      })
+
+      youtubePlayerRef.current.on('error', (event: any) => {
+        console.error('YouTube player error:', event)
+        setPlayerError('Failed to load video. Please try another video.')
       })
 
       youtubePlayerRef.current.on('stateChange', (event: any) => {
         const state = event.data
+        console.log('YouTube player state:', state)
+        // State 1 = playing, 2 = paused, 0 = ended, 3 = buffering, 5 = cued
         if (state === 1) {
           onPlayStateChange(true)
         } else if (state === 0 || state === 2) {
@@ -60,30 +88,62 @@ export default function YouTubePlayerComponent({
         }
       }, 1000)
 
-      return () => {
-        clearInterval(timeInterval)
-        if (youtubePlayerRef.current) {
-          youtubePlayerRef.current.destroy()
+        return () => {
+          clearInterval(timeInterval)
+          if (youtubePlayerRef.current) {
+            youtubePlayerRef.current.destroy()
+            youtubePlayerRef.current = null
+            setPlayerReady(false)
+          }
         }
+      } catch (error: any) {
+        console.error('Error initializing YouTube player:', error)
+        setPlayerError('Failed to initialize YouTube player. Please refresh the page.')
       }
     }
   }, [onPlayStateChange, onTimeUpdate])
 
   useEffect(() => {
-    if (youtubePlayerRef.current && videoId) {
-      youtubePlayerRef.current.loadVideoById(videoId)
+    if (youtubePlayerRef.current && videoId && playerReady) {
+      console.log('Loading video:', videoId)
+      youtubePlayerRef.current.loadVideoById(videoId).catch((error: any) => {
+        console.error('Error loading video:', error)
+        setPlayerError('Failed to load video. Please try again.')
+      })
+    } else if (youtubePlayerRef.current && videoId && !playerReady) {
+      // Wait for player to be ready
+      const checkReady = setInterval(() => {
+        if (playerReady && youtubePlayerRef.current) {
+          clearInterval(checkReady)
+          youtubePlayerRef.current.loadVideoById(videoId).catch((error: any) => {
+            console.error('Error loading video:', error)
+            setPlayerError('Failed to load video. Please try again.')
+          })
+        }
+      }, 100)
+      return () => clearInterval(checkReady)
     }
-  }, [videoId])
+  }, [videoId, playerReady])
 
   useEffect(() => {
-    if (youtubePlayerRef.current) {
+    if (youtubePlayerRef.current && playerReady && videoId) {
       if (isPlaying) {
-        youtubePlayerRef.current.playVideo()
+        console.log('Playing video')
+        youtubePlayerRef.current.playVideo().catch((error: any) => {
+          console.error('Error playing video:', error)
+          // Autoplay might be blocked - show message
+          if (error.message?.includes('autoplay') || error.message?.includes('play')) {
+            setPlayerError('Autoplay blocked. Please click play on the video player.')
+          }
+        })
       } else {
-        youtubePlayerRef.current.pauseVideo()
+        console.log('Pausing video')
+        youtubePlayerRef.current.pauseVideo().catch((error: any) => {
+          console.error('Error pausing video:', error)
+        })
       }
     }
-  }, [isPlaying])
+  }, [isPlaying, playerReady, videoId])
 
   useEffect(() => {
     if (youtubePlayerRef.current && syncTime > 0) {
@@ -132,6 +192,19 @@ export default function YouTubePlayerComponent({
     onVideoChange(id)
     setSearchQuery('')
     setSearchResults([])
+    setPlayerError(null)
+  }
+
+  const handleManualPlay = async () => {
+    if (youtubePlayerRef.current && videoId) {
+      try {
+        await youtubePlayerRef.current.playVideo()
+        onPlayStateChange(true)
+      } catch (error: any) {
+        console.error('Manual play error:', error)
+        setPlayerError('Could not play video. Please check your internet connection and try again.')
+      }
+    }
   }
 
   return (
@@ -145,6 +218,10 @@ export default function YouTubePlayerComponent({
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyPress={(e: React.KeyboardEvent) => e.key === 'Enter' && searchYouTube()}
             className={styles.searchInput}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
           />
           <button onClick={searchYouTube} disabled={isSearching} className={styles.searchButton}>
             {isSearching ? 'Searching...' : 'Search'}
@@ -174,11 +251,32 @@ export default function YouTubePlayerComponent({
       </div>
 
       <div className={styles.playerSection}>
-        {videoId ? (
-          <div ref={playerRef} className={styles.player}></div>
-        ) : (
+        {playerError && (
+          <div className={styles.errorMessage}>
+            <p>⚠️ {playerError}</p>
+            <button onClick={() => setPlayerError(null)} className={styles.dismissButton}>
+              Dismiss
+            </button>
+          </div>
+        )}
+        {/* Always render player container for initialization */}
+        <div ref={playerRef} className={styles.player} style={{ display: videoId ? 'block' : 'none' }}></div>
+        {!videoId && (
           <div className={styles.placeholder}>
             <p>🎵 Search and select a video to start playing</p>
+          </div>
+        )}
+        {videoId && !playerReady && (
+          <div className={styles.loadingMessage}>
+            <p>Loading player...</p>
+          </div>
+        )}
+        {videoId && playerReady && !isPlaying && (
+          <div className={styles.playHint}>
+            <p>💡 Click the play button on the video player to start playback</p>
+            <button onClick={handleManualPlay} className={styles.manualPlayButton}>
+              ▶️ Play Video
+            </button>
           </div>
         )}
       </div>

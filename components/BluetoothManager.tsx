@@ -18,7 +18,12 @@ export default function BluetoothManager({ onConnectionChange }: BluetoothManage
     if (typeof navigator !== 'undefined' && 'bluetooth' in navigator) {
       setIsSupported(true)
     } else {
-      setError('Web Bluetooth API is not supported in this browser. Please use Chrome or Edge.')
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+      if (isMobile) {
+        setError('Web Bluetooth is not available on mobile browsers. Use system settings to connect Bluetooth speakers, then select them in Audio Output.')
+      } else {
+        setError('Web Bluetooth API is not supported in this browser. Please use Chrome or Edge.')
+      }
     }
   }, [])
 

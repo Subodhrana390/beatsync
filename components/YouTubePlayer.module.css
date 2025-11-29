@@ -23,6 +23,13 @@
   background: rgba(255, 255, 255, 0.1);
   color: white;
   font-size: 1rem;
+  min-height: 44px; /* Better touch target */
+}
+
+@media (max-width: 768px) {
+  .searchInput {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
 }
 
 .searchInput::placeholder {
@@ -137,5 +144,83 @@
 .placeholder p {
   font-size: 1.1rem;
   opacity: 0.7;
+}
+
+.errorMessage {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.errorMessage p {
+  margin: 0;
+  color: #fca5a5;
+  flex: 1;
+}
+
+.dismissButton {
+  background: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.dismissButton:hover {
+  background: rgba(239, 68, 68, 0.5);
+}
+
+.loadingMessage {
+  text-align: center;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.loadingMessage p {
+  margin: 0;
+  opacity: 0.8;
+}
+
+.playHint {
+  text-align: center;
+  padding: 0.75rem;
+  background: rgba(102, 126, 234, 0.2);
+  border-radius: 0.5rem;
+  margin-top: 0.5rem;
+  border-left: 3px solid #667eea;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.playHint p {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.manualPlayButton {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s;
+  align-self: center;
+}
+
+.manualPlayButton:hover {
+  transform: translateY(-2px);
 }
 

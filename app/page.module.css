@@ -52,14 +52,44 @@
 @media (max-width: 768px) {
   .main {
     padding: 1rem;
+    padding-bottom: 2rem; /* Extra space for mobile */
   }
 
   .title {
     font-size: 2rem;
+    line-height: 1.2;
+  }
+
+  .subtitle {
+    font-size: 1rem;
   }
 
   .content {
     grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .section {
+    padding: 1rem;
+  }
+
+  .sectionTitle {
+    font-size: 1.25rem;
+  }
+}
+
+/* Extra small mobile devices */
+@media (max-width: 480px) {
+  .main {
+    padding: 0.75rem;
+  }
+
+  .title {
+    font-size: 1.75rem;
+  }
+
+  .section {
+    padding: 0.75rem;
   }
 }
 

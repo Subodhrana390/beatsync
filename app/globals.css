@@ -31,9 +31,27 @@ button {
   border: none;
   outline: none;
   font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
 }
 
 input {
   font-family: inherit;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  font-size: 16px; /* Prevents zoom on iOS */
+}
+
+/* Prevent text selection on mobile */
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+/* Better touch targets for mobile */
+button, a, input, select {
+  min-height: 44px; /* iOS recommended touch target size */
 }
 
