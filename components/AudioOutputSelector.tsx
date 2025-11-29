@@ -13,22 +13,6 @@ export default function AudioOutputSelector({ onDeviceChange }: AudioOutputSelec
   const [selectedDevice, setSelectedDevice] = useState<string>('default')
   const [isSupported, setIsSupported] = useState(false)
 
-  useEffect(() => {
-    const supported = isAudioRoutingSupported()
-    setIsSupported(supported)
-
-    if (supported) {
-      enumerateAudioDevices()
-    }
-  }, [enumerateAudioDevices])
-
-  useEffect(() => {
-    if (isSupported && selectedDevice && selectedDevice !== 'default') {
-      const cleanup = setupAudioRoutingMonitor(selectedDevice)
-      return cleanup
-    }
-  }, [isSupported, selectedDevice])
-
   const enumerateAudioDevices = useCallback(async () => {
     try {
       const devices = await getAudioOutputDevices()
@@ -46,6 +30,22 @@ export default function AudioOutputSelector({ onDeviceChange }: AudioOutputSelec
       console.error('Error enumerating audio devices:', error)
     }
   }, [selectedDevice, onDeviceChange])
+
+  useEffect(() => {
+    const supported = isAudioRoutingSupported()
+    setIsSupported(supported)
+
+    if (supported) {
+      enumerateAudioDevices()
+    }
+  }, [enumerateAudioDevices])
+
+  useEffect(() => {
+    if (isSupported && selectedDevice && selectedDevice !== 'default') {
+      const cleanup = setupAudioRoutingMonitor(selectedDevice)
+      return cleanup
+    }
+  }, [isSupported, selectedDevice])
 
   const handleDeviceChange = (deviceId: string) => {
     setSelectedDevice(deviceId)

@@ -93,3 +93,119 @@
   }
 }
 
+.connectionStatus {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.statusIndicator {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.connected {
+  color: #28a745;
+}
+
+.disconnected {
+  color: #dc3545;
+}
+
+.serverUrl {
+  font-size: 14px;
+  color: #6c757d;
+  margin: 0;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  background: #f8f9fa;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+.debugInfo {
+  font-size: 12px;
+  color: #6c757d;
+  margin-top: 4px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  background: #f1f3f4;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #e9ecef;
+}
+
+.roomManagementPlaceholder {
+  background: white;
+  border-radius: 12px;
+  padding: 40px 20px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  border: 2px dashed #dee2e6;
+}
+
+.placeholderIcon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+.placeholderTitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: #495057;
+  margin: 0 0 12px 0;
+}
+
+.placeholderMessage {
+  font-size: 16px;
+  color: #6c757d;
+  line-height: 1.5;
+  margin: 0;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.connectionActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.testConnectionButton {
+  padding: 8px 16px;
+  border: 1px solid #007bff;
+  border-radius: 6px;
+  background: white;
+  color: #007bff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.testConnectionButton:hover {
+  background: #007bff;
+  color: white;
+}
+
+.reconnectButton {
+  padding: 8px 16px;
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  background: white;
+  color: #ffc107;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.reconnectButton:hover {
+  background: #ffc107;
+  color: #000;
+}
+

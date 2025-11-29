@@ -40,7 +40,12 @@ const io = new Server(server, {
   cors: {
     origin: '*',
     methods: ['GET', 'POST'],
+    credentials: true
   },
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  transports: ['polling', 'websocket'],
+  allowEIO3: true
 });
 
 // Room-based system
@@ -58,9 +63,11 @@ function createRoom(roomId) {
         videoId: null,
         isPlaying: false,
         currentTime: 0,
+        duration: 0,
         isSyncing: false,
       },
       clients: new Set(),
+      readyClients: new Set(), // Track which clients are ready to play
     };
     console.log(`Room ${roomId} created`);
   }
@@ -77,14 +84,31 @@ function joinRoom(socket, roomId) {
   socket.emit('syncState', room.syncState);
   socket.emit('roomJoined', { roomId, clientCount: room.clients.size });
 
+  // Send current ready state to newly connected client
+  socket.emit('readyStateUpdate', {
+    readyCount: room.readyClients.size,
+    totalCount: room.clients.size,
+    allReady: room.readyClients.size === room.clients.size
+  });
+
   return room;
 }
 
 function leaveRoom(socket, roomId) {
   if (rooms[roomId]) {
     rooms[roomId].clients.delete(socket.id);
+    rooms[roomId].readyClients.delete(socket.id); // Also remove from ready clients
     socket.leave(roomId);
     console.log(`Client ${socket.id} left room ${roomId}. Room clients: ${rooms[roomId].clients.size}`);
+
+    // Notify remaining clients about ready state update
+    if (rooms[roomId].clients.size > 0) {
+      io.to(roomId).emit('readyStateUpdate', {
+        readyCount: rooms[roomId].readyClients.size,
+        totalCount: rooms[roomId].clients.size,
+        allReady: rooms[roomId].readyClients.size === rooms[roomId].clients.size
+      });
+    }
 
     // If room is empty, clean it up
     if (rooms[roomId].clients.size === 0) {
@@ -97,6 +121,12 @@ function leaveRoom(socket, roomId) {
 io.on('connection', (socket) => {
   connectedClients++;
   console.log(`Client connected. Total clients: ${connectedClients}`);
+  console.log(`Client details:`, {
+    id: socket.id,
+    transport: socket.conn.transport.name,
+    address: socket.handshake.address,
+    userAgent: socket.handshake.headers['user-agent']?.substring(0, 50) + '...'
+  });
 
   socket.on('createRoom', () => {
     const roomId = generateRoomCode();
@@ -118,10 +148,16 @@ io.on('connection', (socket) => {
         videoId: data.videoId,
         isPlaying: data.isPlaying,
         currentTime: data.time || 0,
+        duration: data.duration || 0,
         isSyncing: true,
       };
-      io.to(roomId).emit('syncAll', room.syncState);
-      console.log(`Room ${roomId} - Sync started:`, room.syncState);
+      // Include timestamp in the broadcast for latency compensation
+      const syncData = {
+        ...room.syncState,
+        timestamp: data.timestamp || Date.now()
+      };
+      io.to(roomId).emit('syncAll', syncData);
+      console.log(`Room ${roomId} - Sync started:`, syncData);
     }
   });
 
@@ -143,32 +179,144 @@ io.on('connection', (socket) => {
         videoId: data.videoId,
         isPlaying: data.isPlaying,
         currentTime: data.time || 0,
+        duration: data.duration || 0,
         isSyncing: true,
       };
-      io.to(roomId).emit('syncAll', room.syncState);
-      console.log(`Room ${roomId} - Sync all:`, room.syncState);
+      // Include timestamp in the broadcast for latency compensation
+      const syncData = {
+        ...room.syncState,
+        timestamp: data.timestamp || Date.now()
+      };
+      io.to(roomId).emit('syncAll', syncData);
+      console.log(`Room ${roomId} - Sync all:`, syncData);
     }
   });
 
-  socket.on('playStateChange', (data) => {
+  socket.on('syncWhenReady', (data) => {
     const roomId = Object.keys(rooms).find(roomId => rooms[roomId].clients.has(socket.id));
     if (roomId) {
       const room = rooms[roomId];
-      if (room.syncState.isSyncing) {
-        room.syncState.isPlaying = data.isPlaying;
-        room.syncState.currentTime = data.time || 0;
-        socket.to(roomId).emit('syncPlay', {
+      // Set the desired sync state but don't start yet
+      room.syncState = {
+        videoId: data.videoId,
+        isPlaying: false, // Will be set to true when all are ready
+        currentTime: data.time || 0,
+        duration: data.duration || 0,
+        isSyncing: false, // Will be set to true when all are ready
+      };
+
+      console.log(`Room ${roomId} - Sync when ready requested. Ready clients: ${room.readyClients.size}/${room.clients.size}`);
+
+      // Check if all clients are ready
+      if (room.readyClients.size === room.clients.size && room.clients.size > 0) {
+        // All clients are ready, start sync immediately
+        room.syncState.isPlaying = true;
+        room.syncState.isSyncing = true;
+        const syncData = {
+          ...room.syncState,
+          timestamp: data.timestamp || Date.now()
+        };
+        io.to(roomId).emit('syncAll', syncData);
+        console.log(`Room ${roomId} - All clients ready, starting sync:`, syncData);
+      } else {
+        // Not all clients ready yet, notify them to prepare
+        io.to(roomId).emit('prepareSync', {
           videoId: data.videoId,
-          time: data.time,
-          isPlaying: data.isPlaying,
+          time: data.time || 0,
+          duration: data.duration || 0
         });
+        console.log(`Room ${roomId} - Waiting for all clients to be ready before starting sync`);
       }
     }
   });
 
-  socket.on('disconnect', () => {
+  socket.on('playStateChange', (data) => {
+    console.log(`📡 Server: Received playStateChange from ${socket.id}:`, {
+      time: data.time,
+      isPlaying: data.isPlaying,
+      videoId: data.videoId?.substring(0, 11) + '...'
+    });
+
+    const roomId = Object.keys(rooms).find(roomId => rooms[roomId].clients.has(socket.id));
+    if (roomId) {
+      const room = rooms[roomId];
+      // Always update the room state, but only broadcast if syncing or if it's just a seek/time change
+      room.syncState.isPlaying = data.isPlaying;
+      room.syncState.currentTime = data.time || 0;
+      room.syncState.duration = data.duration || room.syncState.duration;
+
+      console.log(`📤 Server: Broadcasting syncPlay to ${room.clients.size - 1} other clients in room ${roomId}`);
+
+      // Broadcast to other clients in the room (for seek synchronization)
+      socket.to(roomId).emit('syncPlay', {
+        videoId: data.videoId,
+        time: data.time,
+        duration: room.syncState.duration,
+        isPlaying: data.isPlaying,
+      });
+
+      console.log(`✅ Server: syncPlay broadcast complete for room ${roomId}`);
+    } else {
+      console.log(`❌ Server: Client ${socket.id} not found in any room`);
+    }
+  });
+
+  socket.on('clientReady', () => {
+    const roomId = Object.keys(rooms).find(roomId => rooms[roomId].clients.has(socket.id));
+    if (roomId) {
+      const room = rooms[roomId];
+      room.readyClients.add(socket.id);
+      console.log(`Client ${socket.id} ready in room ${roomId}. Ready clients: ${room.readyClients.size}/${room.clients.size}`);
+
+      // Check if all clients are now ready and there's a video to sync
+      const allReady = room.readyClients.size === room.clients.size;
+      const hasVideo = room.syncState.videoId && room.syncState.currentTime >= 0;
+
+      // Notify all clients about ready state update
+      io.to(roomId).emit('readyStateUpdate', {
+        readyCount: room.readyClients.size,
+        totalCount: room.clients.size,
+        allReady: allReady
+      });
+
+      // If all clients are ready and there's a pending sync, start it
+      if (allReady && hasVideo && !room.syncState.isSyncing) {
+        room.syncState.isPlaying = true;
+        room.syncState.isSyncing = true;
+        const syncData = {
+          ...room.syncState,
+          timestamp: Date.now()
+        };
+        io.to(roomId).emit('syncAll', syncData);
+        console.log(`Room ${roomId} - All clients ready, auto-starting pending sync:`, syncData);
+      }
+    }
+  });
+
+  socket.on('clientNotReady', () => {
+    const roomId = Object.keys(rooms).find(roomId => rooms[roomId].clients.has(socket.id));
+    if (roomId) {
+      const room = rooms[roomId];
+      room.readyClients.delete(socket.id);
+      console.log(`Client ${socket.id} not ready in room ${roomId}. Ready clients: ${room.readyClients.size}/${room.clients.size}`);
+
+      // Notify all clients about ready state update
+      io.to(roomId).emit('readyStateUpdate', {
+        readyCount: room.readyClients.size,
+        totalCount: room.clients.size,
+        allReady: room.readyClients.size === room.clients.size
+      });
+    }
+  });
+
+  socket.on('disconnect', (reason) => {
     connectedClients--;
     console.log(`Client disconnected. Total clients: ${connectedClients}`);
+    console.log(`Disconnect details:`, {
+      id: socket.id,
+      reason: reason,
+      transport: socket.conn?.transport?.name
+    });
 
     // Remove client from any room they were in
     const roomId = Object.keys(rooms).find(roomId => rooms[roomId].clients.has(socket.id));

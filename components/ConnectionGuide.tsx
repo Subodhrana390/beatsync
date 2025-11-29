@@ -49,6 +49,31 @@ export default function ConnectionGuide({ onServerUrlChange }: ConnectionGuidePr
     }
   }
 
+  const testConnection = async () => {
+    if (!serverUrl.trim()) {
+      alert('Please enter a server URL first')
+      return
+    }
+
+    const url = serverUrl.trim()
+    try {
+      const response = await fetch(`${url.replace(/\/$/, '')}/api/rooms`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (response.ok) {
+        alert('✅ Connection successful! Click "Connect to Server" to use this URL.')
+      } else {
+        alert(`❌ Server responded with status: ${response.status}`)
+      }
+    } catch (error) {
+      alert(`❌ Connection failed: ${error.message}`)
+    }
+  }
+
   const handleServerUrlSubmit = () => {
     if (serverUrl.trim()) {
       const url = serverUrl.trim()
@@ -127,9 +152,14 @@ export default function ConnectionGuide({ onServerUrlChange }: ConnectionGuidePr
                 onChange={(e) => setServerUrl(e.target.value)}
                 className={styles.input}
               />
-              <button onClick={handleServerUrlSubmit} className={styles.connectButton}>
-                Connect to Server
-              </button>
+              <div className={styles.buttonGroup}>
+                <button onClick={testConnection} className={styles.testButton}>
+                  Test Connection
+                </button>
+                <button onClick={handleServerUrlSubmit} className={styles.connectButton}>
+                  Connect to Server
+                </button>
+              </div>
             </div>
             <p className={styles.note}>
               &#128161; For local network: Use the server&apos;s local IP (e.g., <code>http://192.168.1.100:3001</code>)

@@ -197,3 +197,69 @@
   margin-top: 15px;
   font-size: 14px;
 }
+
+.debugInfo {
+  font-size: 10px;
+  color: #6c757d;
+  margin-top: 4px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+.connectionRequired {
+  text-align: center;
+  padding: 40px 20px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  border: 2px dashed #dee2e6;
+}
+
+.connectionIcon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+.connectionTitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: #495057;
+  margin: 0 0 12px 0;
+}
+
+.connectionMessage {
+  font-size: 16px;
+  color: #6c757d;
+  line-height: 1.5;
+  margin: 0 0 16px 0;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.connectionHint {
+  font-size: 14px;
+  color: #007bff;
+  background: #e7f3ff;
+  border: 1px solid #b3d7ff;
+  border-radius: 6px;
+  padding: 12px;
+  font-weight: 500;
+}
+
+.reconnectButton {
+  padding: 8px 16px;
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  background: white;
+  color: #ffc107;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 12px;
+}
+
+.reconnectButton:hover {
+  background: #ffc107;
+  color: #000;
+}
