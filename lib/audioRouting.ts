@@ -8,6 +8,16 @@ export interface AudioDevice {
   kind: MediaDeviceKind
 }
 
+// Extend HTMLAudioElement and HTMLVideoElement to include setSinkId
+declare global {
+  interface HTMLAudioElement {
+    setSinkId(deviceId: string): Promise<void>
+  }
+  interface HTMLVideoElement {
+    setSinkId(deviceId: string): Promise<void>
+  }
+}
+
 /**
  * Check if setSinkId is supported
  */
@@ -56,7 +66,7 @@ export function routeAudioToDevice(deviceId: string): void {
   document.querySelectorAll('audio, video').forEach((element) => {
     if (element instanceof HTMLAudioElement || element instanceof HTMLVideoElement) {
       try {
-        (element as any).setSinkId(deviceId)
+        element.setSinkId(deviceId)
         console.log(`Audio routed to device: ${deviceId}`)
       } catch (error) {
         console.error('Error setting sink ID:', error)
@@ -87,14 +97,14 @@ function routeYouTubeAudio(deviceId: string): void {
         audioElements?.forEach((element) => {
           if (element instanceof HTMLAudioElement || element instanceof HTMLVideoElement) {
             try {
-              (element as any).setSinkId(deviceId)
-            } catch (error) {
+              element.setSinkId(deviceId)
+            } catch {
               // Expected to fail due to cross-origin restrictions
             }
           }
         })
       }
-    } catch (error) {
+    } catch {
       // Expected: Cross-origin iframe access is restricted
       // The audio will use the system's default output device
       console.log('Cannot access YouTube iframe (expected due to CORS)')

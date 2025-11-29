@@ -36,7 +36,7 @@ export default function ConnectionGuide({ onServerUrlChange }: ConnectionGuidePr
           resolve('Unable to detect')
         }, 1000)
       })
-    } catch (error) {
+    } catch {
       return 'Unable to detect'
     }
   }
@@ -116,8 +116,8 @@ export default function ConnectionGuide({ onServerUrlChange }: ConnectionGuidePr
             <p>On each device that wants to join:</p>
             <ol>
               <li>Enter the server IP address below</li>
-              <li>Click "Connect to Server"</li>
-              <li>Wait for "🟢 Syncing" status</li>
+              <li>Click &quot;Connect to Server&quot;</li>
+              <li>Wait for &quot;&#128994; Syncing&quot; status</li>
             </ol>
             <div className={styles.serverInput}>
               <input
@@ -132,9 +132,9 @@ export default function ConnectionGuide({ onServerUrlChange }: ConnectionGuidePr
               </button>
             </div>
             <p className={styles.note}>
-              💡 For local network: Use the server's local IP (e.g., <code>http://192.168.1.100:3001</code>)
+              &#128161; For local network: Use the server&apos;s local IP (e.g., <code>http://192.168.1.100:3001</code>)
               <br />
-              💡 For remote connection: Use the server's public IP or domain name
+              &#128161; For remote connection: Use the server&apos;s public IP or domain name
             </p>
           </div>
 
@@ -143,16 +143,16 @@ export default function ConnectionGuide({ onServerUrlChange }: ConnectionGuidePr
             <p>Once all devices are connected:</p>
             <ol>
               <li>One person searches and selects a YouTube video</li>
-              <li>Click "Start Sync" or "Sync All Devices"</li>
+              <li>Click &quot;Start Sync&quot; or &quot;Sync All Devices&quot;</li>
               <li>All connected devices will play in perfect sync!</li>
             </ol>
           </div>
 
           <div className={styles.troubleshooting}>
-            <h3>🔧 Troubleshooting</h3>
+            <h3>&#128295; Troubleshooting</h3>
             <ul>
-              <li><strong>Can't connect?</strong> Make sure the server is running and firewall allows port 3001</li>
-              <li><strong>Not syncing?</strong> Check that all devices show "🟢 Syncing" status</li>
+              <li><strong>Can&apos;t connect?</strong> Make sure the server is running and firewall allows port 3001</li>
+              <li><strong>Not syncing?</strong> Check that all devices show &quot;&#128994; Syncing&quot; status</li>
               <li><strong>Same network?</strong> All devices should be on the same Wi-Fi network for local connections</li>
               <li><strong>Firewall?</strong> Temporarily disable firewall or allow port 3001</li>
             </ul>

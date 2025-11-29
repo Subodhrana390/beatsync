@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { isAudioRoutingSupported, getAudioOutputDevices, routeAudioToDevice, setupAudioRoutingMonitor, AudioDevice } from '@/lib/audioRouting'
 import styles from './AudioOutputSelector.module.css'
 
@@ -20,7 +20,7 @@ export default function AudioOutputSelector({ onDeviceChange }: AudioOutputSelec
     if (supported) {
       enumerateAudioDevices()
     }
-  }, [])
+  }, [enumerateAudioDevices])
 
   useEffect(() => {
     if (isSupported && selectedDevice && selectedDevice !== 'default') {
@@ -29,11 +29,11 @@ export default function AudioOutputSelector({ onDeviceChange }: AudioOutputSelec
     }
   }, [isSupported, selectedDevice])
 
-  const enumerateAudioDevices = async () => {
+  const enumerateAudioDevices = useCallback(async () => {
     try {
       const devices = await getAudioOutputDevices()
       setAvailableDevices(devices)
-      
+
       // Set default device
       if (devices.length > 0 && selectedDevice === 'default') {
         const defaultDevice = devices.find(d => d.deviceId === 'default') || devices[0]
@@ -45,7 +45,7 @@ export default function AudioOutputSelector({ onDeviceChange }: AudioOutputSelec
     } catch (error) {
       console.error('Error enumerating audio devices:', error)
     }
-  }
+  }, [selectedDevice, onDeviceChange])
 
   const handleDeviceChange = (deviceId: string) => {
     setSelectedDevice(deviceId)

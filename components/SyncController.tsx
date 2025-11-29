@@ -1,76 +1,71 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { io, Socket } from 'socket.io-client'
+import { useState, useEffect } from 'react'
+import { Socket } from 'socket.io-client'
 import styles from './SyncController.module.css'
+
+interface SyncState {
+  videoId: string | null
+  isPlaying: boolean
+  currentTime: number
+  isSyncing: boolean
+}
 
 interface SyncControllerProps {
   isConnected: boolean
   videoId: string | null
   isPlaying: boolean
   syncTime: number
-  serverUrl?: string
+  roomId?: string | null
+  socket?: Socket | null
   onPlayStateChange?: (playing: boolean) => void
   onVideoChange?: (videoId: string) => void
   onTimeUpdate?: (time: number) => void
 }
 
 export default function SyncController({
-  isConnected,
   videoId,
   isPlaying,
   syncTime,
-  serverUrl,
+  roomId,
+  socket: externalSocket,
   onPlayStateChange,
   onVideoChange,
   onTimeUpdate,
 }: SyncControllerProps) {
-  const [socket, setSocket] = useState<Socket | null>(null)
   const [isSyncing, setIsSyncing] = useState(false)
   const [connectedClients, setConnectedClients] = useState(0)
-  const syncIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const socketRef = useRef<Socket | null>(null)
 
   useEffect(() => {
-    // Get server URL from prop, localStorage, or default
-    const url = serverUrl || 
-                (typeof window !== 'undefined' && localStorage.getItem('syncServerUrl')) ||
-                process.env.NEXT_PUBLIC_SOCKET_URL || 
-                'http://localhost:3001'
-
-    // Close existing socket if any
-    if (socketRef.current) {
-      socketRef.current.close()
-      socketRef.current = null
+    if (!externalSocket) {
+      setIsSyncing(false)
+      setConnectedClients(0)
+      return
     }
 
-    // Initialize Socket.io connection with mobile-friendly settings
-    const newSocket = io(url, {
-      transports: ['polling', 'websocket'], // Try polling first for mobile
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 10,
-      timeout: 20000,
-      forceNew: false,
-      upgrade: true,
-    })
+    // Reset state when room changes
+    setIsSyncing(false)
+    setConnectedClients(0)
 
-    newSocket.on('connect', () => {
+    const socket = externalSocket
+
+    socket.on('connect', () => {
       console.log('Connected to sync server')
       setIsSyncing(true)
     })
 
-    newSocket.on('disconnect', () => {
+    socket.on('disconnect', () => {
       console.log('Disconnected from sync server')
       setIsSyncing(false)
+      setConnectedClients(0)
     })
 
-    newSocket.on('clientCount', (count: number) => {
+    socket.on('clientCount', (count: number) => {
       setConnectedClients(count)
     })
 
-    newSocket.on('syncState', (state: any) => {
-      // Receive initial sync state when connecting
+    socket.on('syncState', (state: SyncState) => {
+      // Receive initial sync state when connecting to room
       if (state.videoId && onVideoChange) {
         onVideoChange(state.videoId)
       }
@@ -82,7 +77,7 @@ export default function SyncController({
       }
     })
 
-    newSocket.on('syncAll', (data: { videoId: string; isPlaying: boolean; currentTime: number }) => {
+    socket.on('syncAll', (data: { videoId: string; isPlaying: boolean; currentTime: number }) => {
       // Handle sync all command from server
       console.log('Sync all received:', data)
       if (data.videoId && onVideoChange) {
@@ -96,7 +91,7 @@ export default function SyncController({
       }
     })
 
-    newSocket.on('syncPlay', (data: { videoId: string; time: number; isPlaying: boolean }) => {
+    socket.on('syncPlay', (data: { videoId: string; time: number; isPlaying: boolean }) => {
       // Handle sync play command from server
       console.log('Sync play received:', data)
       if (data.videoId && onVideoChange) {
@@ -110,7 +105,7 @@ export default function SyncController({
       }
     })
 
-    newSocket.on('syncStop', () => {
+    socket.on('syncStop', () => {
       // Handle sync stop command from server
       console.log('Sync stopped')
       if (onPlayStateChange) {
@@ -118,31 +113,33 @@ export default function SyncController({
       }
     })
 
-    socketRef.current = newSocket
-    setSocket(newSocket)
-
+    // Cleanup function to remove listeners
     return () => {
-      newSocket.close()
-      socketRef.current = null
+      socket.off('connect')
+      socket.off('disconnect')
+      socket.off('clientCount')
+      socket.off('syncState')
+      socket.off('syncAll')
+      socket.off('syncPlay')
+      socket.off('syncStop')
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverUrl])
+  }, [externalSocket, roomId, onPlayStateChange, onTimeUpdate, onVideoChange])
 
   useEffect(() => {
-    if (socket && isSyncing && videoId) {
+    if (externalSocket && isSyncing && videoId && roomId) {
       // Broadcast play state changes
-      socket.emit('playStateChange', {
+      externalSocket.emit('playStateChange', {
         videoId,
         isPlaying,
         time: syncTime,
       })
     }
-  }, [socket, isSyncing, videoId, isPlaying, syncTime])
+  }, [externalSocket, isSyncing, videoId, isPlaying, syncTime, roomId])
 
   const startSync = () => {
-    if (socket && videoId) {
+    if (externalSocket && videoId && roomId) {
       // Always start sync with playing=true to ensure video starts
-      socket.emit('startSync', {
+      externalSocket.emit('startSync', {
         videoId,
         time: syncTime,
         isPlaying: true, // Force playing state for sync start
@@ -155,14 +152,14 @@ export default function SyncController({
   }
 
   const stopSync = () => {
-    if (socket) {
-      socket.emit('stopSync')
+    if (externalSocket && roomId) {
+      externalSocket.emit('stopSync')
     }
   }
 
   const syncAll = () => {
-    if (socket && videoId) {
-      socket.emit('syncAll', {
+    if (externalSocket && videoId && roomId) {
+      externalSocket.emit('syncAll', {
         videoId,
         time: syncTime,
         isPlaying: true, // Force playing state for sync all
@@ -194,29 +191,32 @@ export default function SyncController({
         <button
           className={styles.button}
           onClick={startSync}
-          disabled={!videoId || !isSyncing}
+          disabled={!videoId || !roomId || !isSyncing}
         >
           Start Sync
         </button>
         <button
           className={styles.button}
           onClick={syncAll}
-          disabled={!videoId || !isSyncing}
+          disabled={!videoId || !roomId || !isSyncing}
         >
           Sync All Devices
         </button>
         <button
           className={styles.button}
           onClick={stopSync}
-          disabled={!isSyncing}
+          disabled={!roomId || !isSyncing}
         >
           Stop Sync
         </button>
       </div>
 
-      {!isSyncing && (
+      {(!isSyncing || !roomId) && (
         <div className={styles.warning}>
-          ⚠️ Sync server not connected. Make sure the sync server is running on port 3001.
+          {!roomId
+            ? '⚠️ Join or create a room first to enable sync controls.'
+            : '⚠️ Sync server not connected. Make sure the sync server is running and you\'re in a room.'
+          }
         </div>
       )}
 

@@ -1,8 +1,73 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
+import Image from "next/image";
 import styles from "./YouTubePlayer.module.css";
 import { isMobileDevice } from "@/lib/mobileUtils";
+
+// YouTube API types
+interface YouTubePlayer {
+  destroy: () => void;
+  loadVideoById: (videoId: string) => void;
+  playVideo: () => void;
+  pauseVideo: () => void;
+  seekTo: (time: number) => void;
+  getCurrentTime: () => number;
+  getDuration: () => number;
+  setVolume: (volume: number) => void;
+  unMute: () => void;
+  mute: () => void;
+  isMuted: () => boolean;
+  getVolume: () => number;
+}
+
+interface YouTubePlayerEvent {
+  target: YouTubePlayer;
+  data?: number;
+}
+
+interface YouTubeSearchResult {
+  id: {
+    videoId: string;
+  };
+  snippet: {
+    title: string;
+    channelTitle: string;
+    thumbnails: {
+      high?: {
+        url: string;
+      };
+    };
+  };
+}
+
+interface YouTubeAPI {
+  Player: new (
+    element: HTMLElement,
+    options: {
+      width: string;
+      height: number;
+      playerVars: Record<string, number>;
+      events: {
+        onReady?: (event: YouTubePlayerEvent) => void;
+        onStateChange?: (event: YouTubePlayerEvent) => void;
+      };
+    }
+  ) => YouTubePlayer;
+  PlayerState: {
+    PLAYING: number;
+    PAUSED: number;
+    ENDED: number;
+    CUED: number;
+  };
+}
+
+interface WindowWithYouTube extends Window {
+  YT?: YouTubeAPI;
+  onYouTubeIframeAPIReady?: () => void;
+  AudioContext?: typeof AudioContext;
+  webkitAudioContext?: typeof AudioContext;
+}
 
 interface Props {
   videoId: string | null;
@@ -23,7 +88,7 @@ export default function YouTubePlayer({
 }: Props) {
   // DOM refs
   const ytHolderRef = useRef<HTMLDivElement | null>(null);
-  const playerRef = useRef<any>(null);
+  const playerRef = useRef<YouTubePlayer | null>(null);
 
   // Audio unlock ref
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -35,7 +100,6 @@ export default function YouTubePlayer({
   // UI State
   const [playerReady, setPlayerReady] = useState(false);
   const [playerError, setPlayerError] = useState<string | null>(null);
-  const [fallback, setFallback] = useState(false);
 
   // Track info
   const [currentTime, setCurrentTime] = useState(0);
@@ -45,7 +109,7 @@ export default function YouTubePlayer({
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<YouTubeSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
 
   // Metadata
@@ -65,7 +129,7 @@ export default function YouTubePlayer({
   // --------------------------------------------------------------------
   const unlockAudio = async () => {
     try {
-      const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      const Ctx = (window as WindowWithYouTube).AudioContext || (window as WindowWithYouTube).webkitAudioContext;
       if (!Ctx) return;
 
       if (!audioCtxRef.current) {
@@ -100,7 +164,7 @@ export default function YouTubePlayer({
       }
 
       // YouTube calls this when ready
-      (window as any).onYouTubeIframeAPIReady = () => {
+      (window as WindowWithYouTube).onYouTubeIframeAPIReady = () => {
         resolve();
       };
     });
@@ -109,7 +173,7 @@ export default function YouTubePlayer({
   // --------------------------------------------------------------------
   // CREATE PLAYER (ONLY AFTER API READY)
   // --------------------------------------------------------------------
-  const createPlayer = () => {
+  const createPlayer = useCallback(() => {
     if (!ytHolderRef.current) return;
 
     const height = isMobileDevice() ? 260 : 360;
@@ -125,13 +189,13 @@ export default function YouTubePlayer({
         rel: 0,
       },
       events: {
-        onReady: (e: any) => {
+        onReady: (e: YouTubePlayerEvent) => {
           setPlayerReady(true);
           e.target.setVolume(100);
           e.target.unMute();
           setMuted(false);
         },
-        onStateChange: (e: any) => {
+        onStateChange: (e: YouTubePlayerEvent) => {
           const S = window.YT.PlayerState;
           if (e.data === S.PLAYING) onPlayStateChange(true);
           if (e.data === S.PAUSED || e.data === S.ENDED) onPlayStateChange(false);
@@ -145,12 +209,12 @@ export default function YouTubePlayer({
     });
 
     startPolling();
-  };
+  }, [onPlayStateChange, updateDuration, startPolling]);
 
   // --------------------------------------------------------------------
   // GESTURE INITIALIZER (audio unlock → load YT → create player)
   // --------------------------------------------------------------------
-  const initOnGesture = () => {
+  const initOnGesture = useCallback(() => {
     if (didGesture.current) return;
 
     const handler = async () => {
@@ -165,12 +229,12 @@ export default function YouTubePlayer({
 
     window.addEventListener("click", handler, { passive: true });
     window.addEventListener("touchstart", handler, { passive: true });
-  };
+  }, [createPlayer]);
 
   // --------------------------------------------------------------------
   // POLLING
   // --------------------------------------------------------------------
-  const startPolling = () => {
+  const startPolling = useCallback(() => {
     stopPolling();
     pollRef.current = window.setInterval(() => {
       if (!playerReady || !playerRef.current) return;
@@ -187,17 +251,17 @@ export default function YouTubePlayer({
         setDuration(d);
       }
     }, 700);
-  };
+  }, [playerReady, onTimeUpdate, stopPolling]);
 
-  const stopPolling = () => {
+  const stopPolling = useCallback(() => {
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = null;
-  };
+  }, []);
 
   // --------------------------------------------------------------------
   // PLAYER ACTIONS (correct order)
   // --------------------------------------------------------------------
-  const safePlay = async () => {
+  const safePlay = useCallback(async () => {
     await unlockAudio();
 
     try {
@@ -207,24 +271,24 @@ export default function YouTubePlayer({
 
       playerRef.current?.playVideo();
     } catch {}
-  };
+  }, []);
 
   const safePause = () => {
     playerRef.current?.pauseVideo?.();
   };
 
-  const safeSeek = (sec: number) => {
+  const safeSeek = useCallback((sec: number) => {
     playerRef.current?.seekTo?.(Math.max(0, sec), true);
-  };
+  }, []);
 
-  const updateDuration = () => {
+  const updateDuration = useCallback(() => {
     try {
       const d = playerRef.current?.getDuration?.();
       if (d && d > 0) setDuration(d);
     } catch {}
-  };
+  }, []);
 
-  const safeLoad = (id: string) => {
+  const safeLoad = useCallback((id: string) => {
     if (!playerReady || !playerRef.current) return;
 
     playerRef.current.loadVideoById(id);
@@ -234,7 +298,7 @@ export default function YouTubePlayer({
         playerRef.current.pauseVideo();
       } catch {}
     }, 150);
-  };
+  }, [playerReady]);
 
   // --------------------------------------------------------------------
   // SEARCH
@@ -264,7 +328,7 @@ export default function YouTubePlayer({
     }
   };
 
-  const selectResult = (item: any) => {
+  const selectResult = (item: YouTubeSearchResult) => {
     const id = item?.id?.videoId;
     if (!id) return;
 
@@ -285,21 +349,21 @@ export default function YouTubePlayer({
   useEffect(() => {
     initOnGesture();
     return () => playerRef.current?.destroy?.();
-  }, []);
+  }, [initOnGesture]);
 
   useEffect(() => {
     if (videoId && playerReady) safeLoad(videoId);
-  }, [videoId, playerReady]);
+  }, [videoId, playerReady, safeLoad]);
 
   useEffect(() => {
     if (!playerReady) return;
     if (isPlaying) safePlay();
     else safePause();
-  }, [isPlaying, playerReady]);
+  }, [isPlaying, playerReady, safePlay]);
 
   useEffect(() => {
     if (playerReady && syncTime > 0) safeSeek(syncTime);
-  }, [syncTime]);
+  }, [syncTime, playerReady, safeSeek]);
 
   const thumb =
     nowThumb || (videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null);
@@ -313,7 +377,13 @@ export default function YouTubePlayer({
       <div className={styles.nowPlayingCard}>
         <div className={styles.artwork}>
           {thumb ? (
-            <img src={thumb} className={styles.artImg} />
+            <Image
+              src={thumb}
+              alt={title || "Album artwork"}
+              width={80}
+              height={80}
+              className={styles.artImg}
+            />
           ) : (
             <div className={styles.artPlaceholder}>🎵</div>
           )}
@@ -403,8 +473,11 @@ export default function YouTubePlayer({
               className={styles.resultItem}
               onClick={() => selectResult(item)}
             >
-              <img
-                src={item.snippet.thumbnails?.medium?.url}
+              <Image
+                src={item.snippet.thumbnails?.medium?.url || ""}
+                alt={item.snippet.title}
+                width={120}
+                height={90}
                 className={styles.resultThumb}
               />
               <div>
