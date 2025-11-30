@@ -37,6 +37,12 @@ export default function YouTubePlayer({
   const [nowChannel, setNowChannel] = useState(null)
   const [nowThumb, setNowThumb] = useState(null)
 
+  // Seek detection variables
+  const lastBroadcastedTimeRef = useRef(0)
+  const lastKnownTimeRef = useRef(0)
+  const isUserSeekingRef = useRef(false)
+  const lastSeekBroadcastTimeRef = useRef(0)
+
   // Load YouTube IFrame API
   useEffect(() => {
     if (window.YT && window.YT.Player) {
@@ -88,6 +94,14 @@ export default function YouTubePlayer({
             // Broadcast real-time pause state change
             const currentTime = playerInstanceRef.current.getCurrentTime()
             broadcastPlayStateChange(false, currentTime)
+          } else if (event.data === window.YT.PlayerState.BUFFERING) {
+            // Buffering often indicates a seek operation
+            console.log('⏳ Player buffering (possible seek operation)')
+          } else if (event.data === window.YT.PlayerState.CUED) {
+            // Video cued and ready to play
+            console.log('🎬 Video cued and ready')
+            lastKnownTimeRef.current = 0
+            lastBroadcastedTimeRef.current = 0
           }
         },
         onError: (error) => {
@@ -143,9 +157,20 @@ export default function YouTubePlayer({
     const adjustedTime = Math.max(0, syncTime + latencySeconds)
 
     try {
+      // Prevent seek detection from triggering for sync seeks
+      isUserSeekingRef.current = true
       playerInstanceRef.current.seekTo(adjustedTime, true)
+      lastKnownTimeRef.current = adjustedTime
+      lastBroadcastedTimeRef.current = adjustedTime
+
+      console.log(`🔄 Applied sync seek to ${adjustedTime.toFixed(1)}s (latency: ${latencySeconds.toFixed(1)}s)`)
+
+      // Re-enable seek detection after a delay
+      setTimeout(() => {
+        isUserSeekingRef.current = false
+      }, 1000)
     } catch (error) {
-      console.error('Seek error:', error)
+      console.error('Sync seek error:', error)
     }
   }, [syncTime, syncTimestamp])
 
@@ -156,6 +181,9 @@ export default function YouTubePlayer({
     const handleIncomingPlayStateChange = (data) => {
       console.log('📥 Received real-time playStateChange:', data)
       try {
+        // Prevent echo by temporarily disabling seek detection
+        isUserSeekingRef.current = true
+
         if (data.isPlaying !== undefined && playerInstanceRef.current) {
           if (data.isPlaying) {
             playerInstanceRef.current.playVideo()
@@ -165,7 +193,14 @@ export default function YouTubePlayer({
         }
         if (data.time !== undefined && playerInstanceRef.current) {
           playerInstanceRef.current.seekTo(data.time, true)
+          lastKnownTimeRef.current = data.time
+          lastBroadcastedTimeRef.current = data.time
         }
+
+        // Re-enable seek detection after a delay
+        setTimeout(() => {
+          isUserSeekingRef.current = false
+        }, 1000)
       } catch (error) {
         console.error('Error applying real-time playStateChange:', error)
       }
@@ -202,7 +237,7 @@ export default function YouTubePlayer({
     }
   }, [socket, roomId])
 
-  // Update time and duration
+  // Update time and duration with seek detection
   useEffect(() => {
     if (!playerInstanceRef.current) return
 
@@ -212,9 +247,41 @@ export default function YouTubePlayer({
         const dur = playerInstanceRef.current.getDuration()
 
         if (time !== undefined) {
+          const lastTime = lastKnownTimeRef.current
+          const timeDiff = Math.abs(time - lastTime)
+
+          // Detect manual seeking with improved logic:
+          // - Time difference > 2 seconds (not just playback drift)
+          // - Time difference < 2 hours (avoid false positives)
+          // - Not currently processing a programmatic seek
+          // - Debounce broadcasts to prevent spam (minimum 500ms between broadcasts)
+          const now = Date.now()
+          const timeSinceLastSeekBroadcast = now - lastSeekBroadcastTimeRef.current
+
+          if (timeDiff > 2 &&
+              timeDiff < 7200 && // 2 hours max
+              !isUserSeekingRef.current &&
+              timeSinceLastSeekBroadcast > 500) { // Minimum 500ms between broadcasts
+
+            console.log(`🔍 Detected manual seek: ${lastTime.toFixed(1)}s → ${time.toFixed(1)}s (${timeDiff.toFixed(1)}s difference)`)
+            isUserSeekingRef.current = true
+
+            // Broadcast the seek immediately
+            broadcastSeek(time)
+            lastBroadcastedTimeRef.current = time
+            lastSeekBroadcastTimeRef.current = now
+
+            // Reset seeking flag after a delay
+            setTimeout(() => {
+              isUserSeekingRef.current = false
+            }, 1000) // Slightly longer to prevent double detection
+          }
+
+          lastKnownTimeRef.current = time
           setCurrentTime(time)
           onTimeUpdate(time)
         }
+
         if (dur && dur > 0) {
           setDuration(dur)
           onDurationUpdate?.(dur)
@@ -224,7 +291,7 @@ export default function YouTubePlayer({
       }
     }
 
-    const interval = setInterval(updateInfo, 100)
+    const interval = setInterval(updateInfo, 200) // Check every 200ms for better responsiveness
     return () => clearInterval(interval)
   }, [onTimeUpdate, onDurationUpdate])
 
@@ -242,10 +309,19 @@ export default function YouTubePlayer({
     const newTime = direction === 'forward' ? current + 10 : Math.max(0, current - 10)
 
     try {
+      // Prevent seek detection from triggering for programmatic seeks
+      isUserSeekingRef.current = true
       playerInstanceRef.current.seekTo(newTime, true)
       onSeek?.(newTime)
       // Broadcast real-time seek
       broadcastSeek(newTime)
+      lastKnownTimeRef.current = newTime
+      lastBroadcastedTimeRef.current = newTime
+
+      // Re-enable seek detection after a delay
+      setTimeout(() => {
+        isUserSeekingRef.current = false
+      }, 1000)
     } catch (error) {
       console.error('Seek error:', error)
     }

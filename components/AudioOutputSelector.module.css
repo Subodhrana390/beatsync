@@ -106,3 +106,95 @@
   margin-top: 0.5rem !important;
 }
 
+/* Mobile-specific styles */
+.mobileFallback {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.mobileIcon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.9;
+}
+
+.mobileFallback h4 {
+  margin: 0 0 1rem 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.mobileFallback p {
+  margin: 0.5rem 0;
+  line-height: 1.5;
+  opacity: 0.9;
+}
+
+.mobileInstructions {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin: 1rem 0;
+  text-align: left;
+}
+
+.mobileInstructions h5 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fbbf24;
+}
+
+.mobileInstructions ol {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.mobileInstructions li {
+  margin: 0.25rem 0;
+  line-height: 1.4;
+  font-size: 0.9rem;
+}
+
+.mobileInstructions strong {
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+.mobileNote {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.mobileNote p {
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  opacity: 0.9;
+}
+
+.mobileNote strong {
+  color: #10b981;
+}
+
+/* Responsive adjustments for mobile */
+@media (max-width: 768px) {
+  .mobileFallback {
+    padding: 1rem;
+  }
+
+  .mobileInstructions {
+    padding: 0.75rem;
+    font-size: 0.9rem;
+  }
+
+  .mobileInstructions ol {
+    padding-left: 1.25rem;
+  }
+}
+
