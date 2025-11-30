@@ -290,6 +290,28 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('volumeChange', (data) => {
+    console.log(`🔊 Server: Received volumeChange from ${socket.id}:`, {
+      volume: data.volume,
+      muted: data.muted
+    });
+
+    const roomId = Object.keys(rooms).find(roomId => rooms[roomId].clients.has(socket.id));
+    if (roomId) {
+      console.log(`📤 Server: Broadcasting volumeChange to ${rooms[roomId].clients.size - 1} other clients in room ${roomId}`);
+
+      // Broadcast to other clients in the room
+      socket.to(roomId).emit('volumeChange', {
+        volume: data.volume,
+        muted: data.muted,
+      });
+
+      console.log(`✅ Server: volumeChange broadcast complete for room ${roomId}`);
+    } else {
+      console.log(`❌ Server: Client ${socket.id} not found in any room for volumeChange`);
+    }
+  });
+
   socket.on('clientReady', () => {
     const roomId = Object.keys(rooms).find(roomId => rooms[roomId].clients.has(socket.id));
     if (roomId) {

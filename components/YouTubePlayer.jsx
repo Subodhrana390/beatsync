@@ -9,6 +9,8 @@ export default function YouTubePlayer({
   syncTime,
   syncTimestamp,
   duration: syncDuration,
+  socket,
+  roomId,
   onVideoChange,
   onPlayStateChange,
   onTimeUpdate,
@@ -77,9 +79,15 @@ export default function YouTubePlayer({
         onStateChange: (event) => {
           if (event.data === window.YT.PlayerState.PLAYING) {
             onPlayStateChange(true)
+            // Broadcast real-time play state change
+            const currentTime = playerInstanceRef.current.getCurrentTime()
+            broadcastPlayStateChange(true, currentTime)
           } else if (event.data === window.YT.PlayerState.PAUSED ||
                      event.data === window.YT.PlayerState.ENDED) {
             onPlayStateChange(false)
+            // Broadcast real-time pause state change
+            const currentTime = playerInstanceRef.current.getCurrentTime()
+            broadcastPlayStateChange(false, currentTime)
           }
         },
         onError: (error) => {
@@ -141,6 +149,59 @@ export default function YouTubePlayer({
     }
   }, [syncTime, syncTimestamp])
 
+  // Real-time control listeners
+  useEffect(() => {
+    if (!socket || !roomId) return
+
+    const handleIncomingPlayStateChange = (data) => {
+      console.log('📥 Received real-time playStateChange:', data)
+      try {
+        if (data.isPlaying !== undefined && playerInstanceRef.current) {
+          if (data.isPlaying) {
+            playerInstanceRef.current.playVideo()
+          } else {
+            playerInstanceRef.current.pauseVideo()
+          }
+        }
+        if (data.time !== undefined && playerInstanceRef.current) {
+          playerInstanceRef.current.seekTo(data.time, true)
+        }
+      } catch (error) {
+        console.error('Error applying real-time playStateChange:', error)
+      }
+    }
+
+    const handleIncomingVolumeChange = (data) => {
+      console.log('📥 Received real-time volumeChange:', data)
+      try {
+        if (data.volume !== undefined && playerInstanceRef.current) {
+          playerInstanceRef.current.setVolume(data.volume)
+          setVolume(data.volume)
+        }
+        if (data.muted !== undefined) {
+          setMuted(data.muted)
+          if (playerInstanceRef.current) {
+            if (data.muted) {
+              playerInstanceRef.current.mute()
+            } else {
+              playerInstanceRef.current.unMute()
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error applying real-time volumeChange:', error)
+      }
+    }
+
+    socket.on('syncPlay', handleIncomingPlayStateChange)
+    socket.on('volumeChange', handleIncomingVolumeChange)
+
+    return () => {
+      socket.off('syncPlay', handleIncomingPlayStateChange)
+      socket.off('volumeChange', handleIncomingVolumeChange)
+    }
+  }, [socket, roomId])
+
   // Update time and duration
   useEffect(() => {
     if (!playerInstanceRef.current) return
@@ -183,6 +244,8 @@ export default function YouTubePlayer({
     try {
       playerInstanceRef.current.seekTo(newTime, true)
       onSeek?.(newTime)
+      // Broadcast real-time seek
+      broadcastSeek(newTime)
     } catch (error) {
       console.error('Seek error:', error)
     }
@@ -194,10 +257,13 @@ export default function YouTubePlayer({
     setVolume(newVolume)
     try {
       playerInstanceRef.current.setVolume(newVolume)
-      if (newVolume > 0) {
+      const willBeMuted = newVolume === 0
+      if (newVolume > 0 && muted) {
         playerInstanceRef.current.unMute()
         setMuted(false)
       }
+      // Broadcast real-time volume change
+      broadcastVolumeChange(newVolume, willBeMuted)
     } catch (error) {
       console.error('Volume error:', error)
     }
@@ -210,12 +276,51 @@ export default function YouTubePlayer({
       if (muted) {
         playerInstanceRef.current.unMute()
         setMuted(false)
+        // Broadcast real-time unmute
+        broadcastVolumeChange(volume, false)
       } else {
         playerInstanceRef.current.mute()
         setMuted(true)
+        // Broadcast real-time mute
+        broadcastVolumeChange(volume, true)
       }
     } catch (error) {
       console.error('Mute toggle error:', error)
+    }
+  }
+
+  // Real-time control broadcasting functions
+  const broadcastPlayStateChange = (playing, currentTime) => {
+    if (socket && roomId) {
+      console.log(`📡 Broadcasting playStateChange: playing=${playing}, time=${currentTime}`)
+      socket.emit('playStateChange', {
+        videoId,
+        isPlaying: playing,
+        time: currentTime,
+        duration,
+      })
+    }
+  }
+
+  const broadcastSeek = (time) => {
+    if (socket && roomId) {
+      console.log(`📡 Broadcasting seek: time=${time}`)
+      socket.emit('playStateChange', {
+        videoId,
+        isPlaying,
+        time,
+        duration,
+      })
+    }
+  }
+
+  const broadcastVolumeChange = (newVolume, isMuted) => {
+    if (socket && roomId) {
+      console.log(`📡 Broadcasting volume change: volume=${newVolume}, muted=${isMuted}`)
+      socket.emit('volumeChange', {
+        volume: newVolume,
+        muted: isMuted,
+      })
     }
   }
 
@@ -303,7 +408,13 @@ export default function YouTubePlayer({
             <button
               disabled={!ytReady}
               className={styles.playPauseBtn}
-              onClick={() => onPlayStateChange(!isPlaying)}
+              onClick={() => {
+                const newPlayingState = !isPlaying
+                onPlayStateChange(newPlayingState)
+                // Broadcast real-time play/pause
+                const currentTime = playerInstanceRef.current?.getCurrentTime() || 0
+                broadcastPlayStateChange(newPlayingState, currentTime)
+              }}
             >
               {isPlaying ? '⏸' : '▶'}
             </button>

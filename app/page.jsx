@@ -226,6 +226,8 @@ export default function Home() {
               syncTime={syncTime}
               syncTimestamp={syncTimestamp}
               duration={duration}
+              socket={roomSocket}
+              roomId={currentRoomId}
               onVideoChange={setCurrentVideoId}
               onPlayStateChange={setIsPlaying}
               onTimeUpdate={setSyncTime}
