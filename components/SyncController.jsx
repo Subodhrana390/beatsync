@@ -1,45 +1,13 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Socket } from 'socket.io-client'
 import styles from './SyncController.module.css'
-
-interface SyncState {
-  videoId: string | null
-  isPlaying: boolean
-  currentTime: number
-  duration: number
-  isSyncing: boolean
-}
-
-interface ReadyState {
-  readyCount: number
-  totalCount: number
-  allReady: boolean
-}
-
-interface SyncControllerProps {
-  isConnected: boolean
-  videoId: string | null
-  isPlaying: boolean
-  syncTime: number
-  syncTimestamp?: number
-  duration: number
-  roomId?: string | null
-  socket?: Socket | null
-  onPlayStateChange?: (playing: boolean) => void
-  onVideoChange?: (videoId: string) => void
-  onTimeUpdate?: (time: number) => void
-  onSyncTimestamp?: (timestamp: number) => void
-  onDurationUpdate?: (duration: number) => void
-  playerReady?: boolean
-}
 
 export default function SyncController({
   videoId,
   isPlaying,
   syncTime,
-  syncTimestamp,
+  syncTimestamp: _syncTimestamp, // eslint-disable-line @typescript-eslint/no-unused-vars
   duration,
   roomId,
   socket: externalSocket,
@@ -49,14 +17,15 @@ export default function SyncController({
   onSyncTimestamp,
   onDurationUpdate,
   playerReady = false,
-}: SyncControllerProps) {
+}) {
   const [isSyncing, setIsSyncing] = useState(false)
   const [connectedClients, setConnectedClients] = useState(0)
-  const [readyState, setReadyState] = useState<ReadyState>({ readyCount: 0, totalCount: 0, allReady: false })
+  const [readyState, setReadyState] = useState({ readyCount: 0, totalCount: 0, allReady: false })
   const [isClientReady, setIsClientReady] = useState(false)
+  const [connectedClientList, setConnectedClientList] = useState([])
 
   // Use refs to avoid dependency issues
-  const socketRef = useRef<Socket | null>(null)
+  const socketRef = useRef(null)
   const callbacksRef = useRef({ onPlayStateChange, onVideoChange, onTimeUpdate, onSyncTimestamp, onDurationUpdate })
 
   // Update refs when props change
@@ -98,12 +67,12 @@ export default function SyncController({
       setConnectedClients(0)
     }
 
-    const handleClientCount = (count: number) => {
+    const handleClientCount = (count) => {
       console.log('👥 SyncController: Client count updated:', count)
       setConnectedClients(count)
     }
 
-    const handleSyncState = (state: SyncState) => {
+    const handleSyncState = (state) => {
       console.log('📡 SyncController: Received sync state:', state)
       if (state.videoId && callbacksRef.current.onVideoChange) {
         callbacksRef.current.onVideoChange(state.videoId)
@@ -118,7 +87,7 @@ export default function SyncController({
       setIsSyncing(state.isSyncing)
     }
 
-    const handleSyncAll = (data: SyncState & { timestamp?: number }) => {
+    const handleSyncAll = (data) => {
       console.log('🔄 SyncController: Sync all received:', data, 'isSyncing:', data.isSyncing)
       if (data.videoId && callbacksRef.current.onVideoChange) {
         callbacksRef.current.onVideoChange(data.videoId)
@@ -140,7 +109,7 @@ export default function SyncController({
       setIsSyncing(data.isSyncing)
     }
 
-    const handleSyncPlay = (data: { videoId: string; time: number; duration?: number; isPlaying: boolean }) => {
+    const handleSyncPlay = (data) => {
       console.log(`📥 SyncController: Received syncPlay: time=${data.time}s, playing=${data.isPlaying}`)
       if (data.videoId && callbacksRef.current.onVideoChange) {
         console.log(`🎬 SyncController: Updating video to ${data.videoId}`)
@@ -151,7 +120,8 @@ export default function SyncController({
         callbacksRef.current.onPlayStateChange(data.isPlaying)
       }
       if (data.time !== undefined && callbacksRef.current.onTimeUpdate) {
-        console.log(`⏱️ SyncController: Updating time to ${data.time}s`)
+        console.log(`⏱️ SyncController: Updating time to ${data.time}s (was syncTime previously set?)`)
+        console.log(`📊 SyncController: Broadcasting time update to YouTubePlayer`)
         callbacksRef.current.onTimeUpdate(data.time)
       }
       if (data.duration !== undefined && callbacksRef.current.onDurationUpdate) {
@@ -168,12 +138,12 @@ export default function SyncController({
       }
     }
 
-    const handleReadyStateUpdate = (state: ReadyState) => {
+    const handleReadyStateUpdate = (state) => {
       console.log('✅ SyncController: Ready state update:', state)
       setReadyState(state)
     }
 
-    const handlePrepareSync = (data: { videoId: string; time: number; duration: number }) => {
+    const handlePrepareSync = (data) => {
       console.log('🎯 SyncController: Prepare sync received:', data)
       if (callbacksRef.current.onVideoChange) {
         callbacksRef.current.onVideoChange(data.videoId)
@@ -188,6 +158,17 @@ export default function SyncController({
       setIsClientReady(false)
     }
 
+    const handleClientListUpdate = (data) => {
+      console.log('👥 SyncController: Client list update:', data)
+      setConnectedClientList(data.clients)
+      setConnectedClients(data.totalCount)
+      setReadyState({
+        readyCount: data.readyCount,
+        totalCount: data.totalCount,
+        allReady: data.readyCount === data.totalCount
+      })
+    }
+
     socket.on('connect', handleConnect)
     socket.on('disconnect', handleDisconnect)
     socket.on('clientCount', handleClientCount)
@@ -197,6 +178,7 @@ export default function SyncController({
     socket.on('syncStop', handleSyncStop)
     socket.on('readyStateUpdate', handleReadyStateUpdate)
     socket.on('prepareSync', handlePrepareSync)
+    socket.on('clientListUpdate', handleClientListUpdate)
 
     console.log('🎧 SyncController: Event listeners attached')
 
@@ -210,6 +192,7 @@ export default function SyncController({
       socket.off('syncStop', handleSyncStop)
       socket.off('readyStateUpdate', handleReadyStateUpdate)
       socket.off('prepareSync', handlePrepareSync)
+      socket.off('clientListUpdate', handleClientListUpdate)
     }
   }, []) // Empty dependency array - only run once on mount
 
@@ -225,6 +208,19 @@ export default function SyncController({
       setIsClientReady(false)
     }
   }, [playerReady, isClientReady, roomId])
+
+  // Send heartbeat every 30 seconds to indicate client is still active
+  useEffect(() => {
+    if (!socketRef.current || !roomId) return
+
+    const heartbeatInterval = setInterval(() => {
+      if (socketRef.current && socketRef.current.connected) {
+        socketRef.current.emit('heartbeat')
+      }
+    }, 30000) // 30 seconds
+
+    return () => clearInterval(heartbeatInterval)
+  }, [roomId])
 
   useEffect(() => {
     // Broadcast play state changes when in a room (for seek synchronization)
@@ -320,19 +316,48 @@ export default function SyncController({
             {isSyncing ? '🟢 Syncing' : '🔴 Not Syncing'}
           </span>
         </div>
+        <div className={styles.statusRow}>
+          <span>Connection:</span>
+          <span className={socketRef.current?.connected ? styles.connected : styles.disconnected}>
+            {socketRef.current?.connected ? '🟢 Connected' : '🔴 Disconnected'}
+          </span>
+        </div>
         {connectedClients > 0 && (
-          <div className={styles.clientCount}>
-            {connectedClients} device(s) connected
-          </div>
-        )}
-        {connectedClients > 1 && (
-          <div className={styles.readyState}>
-            <span>Ready Status:</span>
-            <span className={readyState.allReady ? styles.allReady : styles.waiting}>
-              {readyState.readyCount}/{readyState.totalCount} ready
-              {readyState.allReady ? ' ✅' : ' ⏳'}
-            </span>
-          </div>
+          <>
+            <div className={styles.clientCount}>
+              {connectedClients} device{connectedClients !== 1 ? 's' : ''} connected
+            </div>
+            {connectedClientList.length > 0 && (
+              <div className={styles.clientList}>
+                <div className={styles.clientListHeader}>Connected Devices:</div>
+                {connectedClientList.map((client) => (
+                  <div key={client.id} className={styles.clientItem}>
+                    <span className={`${styles.clientStatus} ${client.ready ? styles.ready : styles.notReady}`}>
+                      {client.ready ? '🟢' : '🔴'}
+                    </span>
+                    <span className={styles.clientInfo}>
+                      Device {client.id.slice(-4)}
+                      <span className={styles.clientDetails}>
+                        {client.userAgent.split(' ')[0]} • {new Date(client.connectedAt).toLocaleTimeString()}
+                      </span>
+                    </span>
+                    <span className={styles.connectionIndicator}>
+                      {new Date() - new Date(client.lastSeen) < 60000 ? '🟢' : '🟡'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {connectedClients > 1 && (
+              <div className={styles.readyState}>
+                <span>Ready Status:</span>
+                <span className={readyState.allReady ? styles.allReady : styles.waiting}>
+                  {readyState.readyCount}/{readyState.totalCount} ready
+                  {readyState.allReady ? ' ✅' : ' ⏳'}
+                </span>
+              </div>
+            )}
+          </>
         )}
         {process.env.NODE_ENV === 'development' && (
           <div className={styles.debugInfo}>
@@ -368,6 +393,19 @@ export default function SyncController({
           </button>
         )}
         <button
+          className={`${styles.button} ${styles.testButton}`}
+          onClick={() => {
+            console.log('🧪 Manual seek sync test: setting syncTime to 30s')
+            if (callbacksRef.current.onTimeUpdate) {
+              callbacksRef.current.onTimeUpdate(30)
+            }
+          }}
+          disabled={!socketRef.current || !roomId}
+          title="Test seek sync by jumping to 30s"
+        >
+          🧪 Test Seek (30s)
+        </button>
+        <button
           className={styles.button}
           onClick={stopSync}
           disabled={!socketRef.current || !roomId || !isSyncing}
@@ -393,4 +431,3 @@ export default function SyncController({
     </div>
   )
 }
-

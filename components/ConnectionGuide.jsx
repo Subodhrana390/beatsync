@@ -3,14 +3,10 @@
 import { useState, useEffect } from 'react'
 import styles from './ConnectionGuide.module.css'
 
-interface ConnectionGuideProps {
-  onServerUrlChange?: (url: string) => void
-}
-
-export default function ConnectionGuide({ onServerUrlChange }: ConnectionGuideProps) {
+export default function ConnectionGuide({ onServerUrlChange }) {
   const [showGuide, setShowGuide] = useState(false)
   const [serverUrl, setServerUrl] = useState('')
-  const [localIp, setLocalIp] = useState<string | null>(null)
+  const [localIp, setLocalIp] = useState(null)
 
   const getLocalIP = async () => {
     try {
@@ -19,8 +15,8 @@ export default function ConnectionGuide({ onServerUrlChange }: ConnectionGuidePr
       pc.createDataChannel('')
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
-      
-      return new Promise<string>((resolve) => {
+
+      return new Promise((resolve) => {
         pc.onicecandidate = (event) => {
           if (event.candidate) {
             const candidate = event.candidate.candidate
@@ -192,4 +188,3 @@ export default function ConnectionGuide({ onServerUrlChange }: ConnectionGuidePr
     </div>
   )
 }
-

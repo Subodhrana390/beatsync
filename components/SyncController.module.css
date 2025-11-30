@@ -27,6 +27,16 @@
   font-weight: 600;
 }
 
+.connected {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.disconnected {
+  color: #ef4444;
+  font-weight: 600;
+}
+
 .clientCount {
   font-size: 0.9rem;
   opacity: 0.8;
@@ -50,6 +60,57 @@
 .waiting {
   color: #f59e0b;
   font-weight: 600;
+}
+
+.clientList {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.clientListHeader {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  opacity: 0.9;
+}
+
+.clientItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  font-size: 0.85rem;
+}
+
+.clientStatus {
+  font-size: 0.8rem;
+}
+
+.ready {
+  color: #10b981;
+}
+
+.notReady {
+  color: #ef4444;
+}
+
+.clientInfo {
+  flex: 1;
+  opacity: 0.9;
+}
+
+.clientDetails {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  margin-left: 0.25rem;
+}
+
+.connectionIndicator {
+  font-size: 0.8rem;
+  margin-left: 0.5rem;
 }
 
 .controls {
@@ -84,6 +145,11 @@
 
 .waitingButton {
   background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+.testButton {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  font-size: 0.8rem;
 }
 
 .warning {

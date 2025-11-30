@@ -2,11 +2,7 @@
 
 import styles from './DeviceList.module.css'
 
-interface DeviceListProps {
-  devices: string[]
-}
-
-export default function DeviceList({ devices }: DeviceListProps) {
+export default function DeviceList({ devices }) {
   if (devices.length === 0) {
     return (
       <div className={styles.container}>
@@ -35,4 +31,3 @@ export default function DeviceList({ devices }: DeviceListProps) {
     </div>
   )
 }
-

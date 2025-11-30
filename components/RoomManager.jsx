@@ -1,29 +1,22 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Socket } from 'socket.io-client'
 import styles from './RoomManager.module.css'
-
-interface RoomManagerProps {
-  socket?: Socket | null
-  onRoomJoined?: (roomId: string, clientCount: number) => void
-  onRoomLeft?: () => void
-}
 
 export default function RoomManager({
   socket: externalSocket,
   onRoomJoined,
   onRoomLeft,
-}: RoomManagerProps) {
-  const [roomId, setRoomId] = useState<string>('')
-  const [inputRoomCode, setInputRoomCode] = useState<string>('')
-  const [clientCount, setClientCount] = useState<number>(0)
+}) {
+  const [roomId, setRoomId] = useState('')
+  const [inputRoomCode, setInputRoomCode] = useState('')
+  const [clientCount, setClientCount] = useState(0)
   const [isCreating, setIsCreating] = useState(false)
   const [isJoining, setIsJoining] = useState(false)
-  const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected')
+  const [connectionStatus, setConnectionStatus] = useState('disconnected')
 
   // Use ref to avoid dependency issues with socket object
-  const socketRef = useRef<Socket | null>(null)
+  const socketRef = useRef(null)
   const callbacksRef = useRef({ onRoomJoined, onRoomLeft })
 
   // Update refs when props change
@@ -72,12 +65,12 @@ export default function RoomManager({
       if (callbacksRef.current.onRoomLeft) callbacksRef.current.onRoomLeft()
     }
 
-    const handleConnectError = (error: any) => {
+    const handleConnectError = (error) => {
       console.error('❌ RoomManager: Connection error:', error)
       setConnectionStatus('disconnected')
     }
 
-    const handleRoomJoined = (data: { roomId: string; clientCount: number }) => {
+    const handleRoomJoined = (data) => {
       setRoomId(data.roomId)
       setClientCount(data.clientCount)
       setIsCreating(false)
@@ -304,7 +297,7 @@ export default function RoomManager({
             Connect to a sync server first to create or join rooms for multi-device audio synchronization.
           </p>
           <div className={styles.connectionHint}>
-            Use the "Server Connection" section above to connect to a sync server.
+            Use the &ldquo;Server Connection&rdquo; section above to connect to a sync server.
           </div>
           {socketRef.current && connectionStatus === 'disconnected' && (
             <button

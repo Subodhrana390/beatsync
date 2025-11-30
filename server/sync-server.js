@@ -49,7 +49,7 @@ const io = new Server(server, {
 });
 
 // Room-based system
-let rooms = {}; // roomId -> { syncState, clients: Set() }
+let rooms = {}; // roomId -> { syncState, clients: Map(), readyClients: Set() }
 let connectedClients = 0;
 
 function generateRoomCode() {
@@ -66,7 +66,7 @@ function createRoom(roomId) {
         duration: 0,
         isSyncing: false,
       },
-      clients: new Set(),
+      clients: new Map(), // clientId -> { id, connectedAt, lastSeen, userAgent }
       readyClients: new Set(), // Track which clients are ready to play
     };
     console.log(`Room ${roomId} created`);
@@ -77,21 +77,47 @@ function createRoom(roomId) {
 function joinRoom(socket, roomId) {
   const room = createRoom(roomId);
   socket.join(roomId);
-  room.clients.add(socket.id);
+
+  // Store client information
+  room.clients.set(socket.id, {
+    id: socket.id,
+    connectedAt: new Date(),
+    lastSeen: new Date(),
+    userAgent: socket.handshake.headers['user-agent']?.substring(0, 50) + '...' || 'Unknown',
+    ready: false
+  });
+
   console.log(`Client ${socket.id} joined room ${roomId}. Room clients: ${room.clients.size}`);
 
   // Send current sync state to newly connected client
   socket.emit('syncState', room.syncState);
+
+  // Send detailed client list to all clients in the room
+  broadcastClientList(roomId);
+
+  // Send room joined confirmation with client count
   socket.emit('roomJoined', { roomId, clientCount: room.clients.size });
 
-  // Send current ready state to newly connected client
-  socket.emit('readyStateUpdate', {
-    readyCount: room.readyClients.size,
-    totalCount: room.clients.size,
-    allReady: room.readyClients.size === room.clients.size
-  });
-
   return room;
+}
+
+function broadcastClientList(roomId) {
+  if (rooms[roomId]) {
+    const room = rooms[roomId];
+    const clientList = Array.from(room.clients.values()).map(client => ({
+      id: client.id,
+      connectedAt: client.connectedAt,
+      lastSeen: client.lastSeen,
+      userAgent: client.userAgent,
+      ready: room.readyClients.has(client.id)
+    }));
+
+    io.to(roomId).emit('clientListUpdate', {
+      clients: clientList,
+      readyCount: room.readyClients.size,
+      totalCount: room.clients.size
+    });
+  }
 }
 
 function leaveRoom(socket, roomId) {
@@ -101,8 +127,11 @@ function leaveRoom(socket, roomId) {
     socket.leave(roomId);
     console.log(`Client ${socket.id} left room ${roomId}. Room clients: ${rooms[roomId].clients.size}`);
 
-    // Notify remaining clients about ready state update
+    // Broadcast updated client list
     if (rooms[roomId].clients.size > 0) {
+      broadcastClientList(roomId);
+
+      // Also update ready state
       io.to(roomId).emit('readyStateUpdate', {
         readyCount: rooms[roomId].readyClients.size,
         totalCount: rooms[roomId].clients.size,
@@ -266,13 +295,22 @@ io.on('connection', (socket) => {
     if (roomId) {
       const room = rooms[roomId];
       room.readyClients.add(socket.id);
+
+      // Update client ready status
+      const client = room.clients.get(socket.id);
+      if (client) {
+        client.ready = true;
+        client.lastSeen = new Date();
+      }
+
       console.log(`Client ${socket.id} ready in room ${roomId}. Ready clients: ${room.readyClients.size}/${room.clients.size}`);
 
       // Check if all clients are now ready and there's a video to sync
       const allReady = room.readyClients.size === room.clients.size;
       const hasVideo = room.syncState.videoId && room.syncState.currentTime >= 0;
 
-      // Notify all clients about ready state update
+      // Broadcast updated client list and ready state
+      broadcastClientList(roomId);
       io.to(roomId).emit('readyStateUpdate', {
         readyCount: room.readyClients.size,
         totalCount: room.clients.size,
@@ -298,9 +336,18 @@ io.on('connection', (socket) => {
     if (roomId) {
       const room = rooms[roomId];
       room.readyClients.delete(socket.id);
+
+      // Update client ready status
+      const client = room.clients.get(socket.id);
+      if (client) {
+        client.ready = false;
+        client.lastSeen = new Date();
+      }
+
       console.log(`Client ${socket.id} not ready in room ${roomId}. Ready clients: ${room.readyClients.size}/${room.clients.size}`);
 
-      // Notify all clients about ready state update
+      // Broadcast updated client list and ready state
+      broadcastClientList(roomId);
       io.to(roomId).emit('readyStateUpdate', {
         readyCount: room.readyClients.size,
         totalCount: room.clients.size,
@@ -309,21 +356,68 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('disconnect', (reason) => {
-    connectedClients--;
-    console.log(`Client disconnected. Total clients: ${connectedClients}`);
-    console.log(`Disconnect details:`, {
-      id: socket.id,
-      reason: reason,
-      transport: socket.conn?.transport?.name
-    });
-
-    // Remove client from any room they were in
+  // Heartbeat/ping mechanism to track active clients
+  socket.on('heartbeat', () => {
     const roomId = Object.keys(rooms).find(roomId => rooms[roomId].clients.has(socket.id));
     if (roomId) {
-      leaveRoom(socket, roomId);
+      const client = rooms[roomId].clients.get(socket.id);
+      if (client) {
+        client.lastSeen = new Date();
+        // Optional: broadcast updated client list if needed
+      }
     }
   });
+
+socket.on('disconnect', (reason) => {
+  connectedClients--;
+  console.log(`Client disconnected. Total clients: ${connectedClients}`);
+  console.log(`Disconnect details:`, {
+    id: socket.id,
+    reason: reason,
+    transport: socket.conn?.transport?.name
+  });
+
+  // Remove client from any room they were in
+  const roomId = Object.keys(rooms).find(roomId => rooms[roomId].clients.has(socket.id));
+  if (roomId) {
+    leaveRoom(socket, roomId);
+  }
+});
+
+// Periodic cleanup of stale clients (clients that haven't sent heartbeat for 2 minutes)
+setInterval(() => {
+  const now = new Date();
+  const staleThreshold = 2 * 60 * 1000; // 2 minutes
+
+  for (const roomId in rooms) {
+    const room = rooms[roomId];
+    const staleClients = [];
+
+    for (const [clientId, client] of room.clients) {
+      if (now - new Date(client.lastSeen) > staleThreshold) {
+        staleClients.push(clientId);
+      }
+    }
+
+    // Remove stale clients
+    for (const clientId of staleClients) {
+      console.log(`Removing stale client ${clientId} from room ${roomId}`);
+      room.clients.delete(clientId);
+      room.readyClients.delete(clientId);
+
+      // Broadcast updated client list
+      if (room.clients.size > 0) {
+        broadcastClientList(roomId);
+      }
+    }
+
+    // Clean up empty rooms
+    if (room.clients.size === 0) {
+      delete rooms[roomId];
+      console.log(`Room ${roomId} deleted (empty after cleanup)`);
+    }
+  }
+}, 60000); // Check every minute
 });
 
 const PORT = process.env.PORT || 3001;

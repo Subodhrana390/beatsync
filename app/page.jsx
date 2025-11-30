@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect ,useCallback} from 'react'
-import { io, Socket } from 'socket.io-client'
+import { useState, useEffect ,useCallback, useRef} from 'react'
+import { io } from 'socket.io-client'
 import BluetoothManager from '@/components/BluetoothManager'
 import YouTubePlayer from '@/components/YouTubePlayer'
 import DeviceList from '@/components/DeviceList'
@@ -13,31 +13,41 @@ import styles from './page.module.css'
 
 export default function Home() {
   const [isConnected, setIsConnected] = useState(false)
-  const [connectedDevices, setConnectedDevices] = useState<string[]>([])
-  const [currentVideoId, setCurrentVideoId] = useState<string | null>(null)
+  const [connectedDevices, setConnectedDevices] = useState([])
+  const [currentVideoId, setCurrentVideoId] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [syncTime, setSyncTime] = useState(0)
-  const [syncTimestamp, setSyncTimestamp] = useState<number | undefined>(undefined)
+  const prevSyncTimeRef = useRef(0)
+  const [syncTimestamp, setSyncTimestamp] = useState(undefined)
   const [duration, setDuration] = useState(0)
   const [playerReady, setPlayerReady] = useState(false)
 
   // Handle seek events from YouTubePlayer and broadcast to sync controller
-  const handleSeek = useCallback((time: number) => {
-    console.log(`🎯 Main app: handleSeek called with ${time}s, previous syncTime was ${syncTime}s`)
+  const handleSeek = useCallback((time) => {
+    console.log(`🎯 Main app: handleSeek called with ${time}s`)
     setSyncTime(time)
-    console.log(`📡 Main app: syncTime updated to ${time}s, SyncController should broadcast`)
-    // The SyncController will automatically broadcast this change
-  }, [syncTime])
+    console.log(`📡 Main app: syncTime set to ${time}s, triggering re-render and SyncController broadcast`)
+    // The SyncController will automatically broadcast this change via useEffect
+  }, [])
 
   // Handle player ready state changes
-  const handlePlayerReady = useCallback((ready: boolean) => {
+  const handlePlayerReady = useCallback((ready) => {
     console.log('🎵 Main app: Player ready state changed:', ready)
     setPlayerReady(ready)
   }, [])
-  const [serverUrl, setServerUrl] = useState<string>('')
-  const [isEnvConfigured, setIsEnvConfigured] = useState<boolean>(false)
-  const [currentRoomId, setCurrentRoomId] = useState<string | null>(null)
-  const [roomSocket, setRoomSocket] = useState<Socket | null>(null)
+
+  // Track syncTime changes for debugging
+  useEffect(() => {
+    const prevSyncTime = prevSyncTimeRef.current
+    if (syncTime !== prevSyncTime) {
+      console.log(`🔄 Main app: syncTime changed from ${prevSyncTime}s to ${syncTime}s`)
+      prevSyncTimeRef.current = syncTime
+    }
+  }, [syncTime])
+  const [serverUrl, setServerUrl] = useState('')
+  const [isEnvConfigured, setIsEnvConfigured] = useState(false)
+  const [currentRoomId, setCurrentRoomId] = useState(null)
+  const [roomSocket, setRoomSocket] = useState(null)
 
   // Check for environment variable and set up initial connection
   useEffect(() => {
@@ -90,11 +100,6 @@ export default function Home() {
   // Create socket connection when server URL is available
   useEffect(() => {
     if (!serverUrl) return
-
-    // Close existing socket
-    if (roomSocket) {
-      roomSocket.close()
-    }
 
     console.log('🔌 Main app: Creating socket connection to:', serverUrl)
     console.log('🔍 Connection config:', {
@@ -362,4 +367,3 @@ export default function Home() {
     </main>
   )
 }
-

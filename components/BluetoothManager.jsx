@@ -3,32 +3,10 @@
 import { useState, useEffect } from 'react'
 import styles from './BluetoothManager.module.css'
 
-// Web Bluetooth API types
-interface BluetoothDevice {
-  id: string;
-  name?: string;
-  addEventListener: (event: string, handler: () => void) => void;
-}
-
-interface Bluetooth {
-  requestDevice: (options: {
-    filters?: Array<{ services: string[] }>;
-    optionalServices?: string[];
-  }) => Promise<BluetoothDevice>;
-}
-
-interface NavigatorWithBluetooth extends Navigator {
-  bluetooth: Bluetooth;
-}
-
-interface BluetoothManagerProps {
-  onConnectionChange: (connected: boolean, devices: string[]) => void
-}
-
-export default function BluetoothManager({ onConnectionChange }: BluetoothManagerProps) {
+export default function BluetoothManager({ onConnectionChange }) {
   const [isScanning, setIsScanning] = useState(false)
-  const [connectedDevices, setConnectedDevices] = useState<string[]>([])
-  const [error, setError] = useState<string | null>(null)
+  const [connectedDevices, setConnectedDevices] = useState([])
+  const [error, setError] = useState(null)
   const [isSupported, setIsSupported] = useState(false)
 
   useEffect(() => {
@@ -56,7 +34,7 @@ export default function BluetoothManager({ onConnectionChange }: BluetoothManage
 
     try {
       // Request Bluetooth device with audio service
-      const device = await (navigator as NavigatorWithBluetooth).bluetooth.requestDevice({
+      const device = await navigator.bluetooth.requestDevice({
         filters: [
           { services: ['0000110a-0000-1000-8000-00805f9b34fb'] }, // Audio/Video Remote Control
           { services: ['0000110d-0000-1000-8000-00805f9b34fb'] }, // Advanced Audio Distribution
@@ -72,17 +50,16 @@ export default function BluetoothManager({ onConnectionChange }: BluetoothManage
       const newDevices = [...connectedDevices, device.name || device.id]
       setConnectedDevices(newDevices)
       onConnectionChange(true, newDevices)
-    } catch (err: unknown) {
-      const error = err as Error;
-      if (error.name !== 'NotFoundError') {
-        setError(error.message || 'Failed to connect to Bluetooth device')
+    } catch (err) {
+      if (err.name !== 'NotFoundError') {
+        setError(err.message || 'Failed to connect to Bluetooth device')
       }
     } finally {
       setIsScanning(false)
     }
   }
 
-  const disconnectDevice = (deviceId: string) => {
+  const disconnectDevice = (deviceId) => {
     setConnectedDevices((prev) => {
       const updated = prev.filter((d) => d !== deviceId)
       onConnectionChange(updated.length > 0, updated)
@@ -145,4 +122,3 @@ export default function BluetoothManager({ onConnectionChange }: BluetoothManage
     </div>
   )
 }
-

@@ -34,7 +34,9 @@
   width: 100%;
   height: 100%;
   border-radius: 12px;
-  object-fit: cover;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
@@ -329,7 +331,9 @@
   width: 80px;
   height: 60px;
   border-radius: 8px;
-  object-fit: cover;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   flex-shrink: 0;
 }
 
@@ -393,6 +397,32 @@
 .playerError button:focus-visible {
   outline: 2px solid #c53030;
   outline-offset: 2px;
+}
+
+.errorActions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.retryButton {
+  background: rgba(34, 197, 94, 0.1) !important;
+  border: 1px solid rgba(34, 197, 94, 0.3) !important;
+  color: #16a34a !important;
+}
+
+.retryButton:hover {
+  background: rgba(34, 197, 94, 0.2) !important;
+}
+
+.resetButton {
+  background: rgba(139, 92, 246, 0.1) !important;
+  border: 1px solid rgba(139, 92, 246, 0.3) !important;
+  color: #7c3aed !important;
+}
+
+.resetButton:hover {
+  background: rgba(139, 92, 246, 0.2) !important;
 }
 
 /* Responsive Design */

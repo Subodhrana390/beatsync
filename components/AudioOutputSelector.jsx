@@ -1,16 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { isAudioRoutingSupported, getAudioOutputDevices, routeAudioToDevice, setupAudioRoutingMonitor, AudioDevice } from '@/lib/audioRouting'
+import { isAudioRoutingSupported, getAudioOutputDevices, routeAudioToDevice, setupAudioRoutingMonitor } from '@/lib/audioRouting'
 import styles from './AudioOutputSelector.module.css'
 
-interface AudioOutputSelectorProps {
-  onDeviceChange?: (deviceId: string) => void
-}
-
-export default function AudioOutputSelector({ onDeviceChange }: AudioOutputSelectorProps) {
-  const [availableDevices, setAvailableDevices] = useState<AudioDevice[]>([])
-  const [selectedDevice, setSelectedDevice] = useState<string>('default')
+export default function AudioOutputSelector({ onDeviceChange }) {
+  const [availableDevices, setAvailableDevices] = useState([])
+  const [selectedDevice, setSelectedDevice] = useState('default')
   const [isSupported, setIsSupported] = useState(false)
 
   const enumerateAudioDevices = useCallback(async () => {
@@ -47,7 +43,7 @@ export default function AudioOutputSelector({ onDeviceChange }: AudioOutputSelec
     }
   }, [isSupported, selectedDevice])
 
-  const handleDeviceChange = (deviceId: string) => {
+  const handleDeviceChange = (deviceId) => {
     setSelectedDevice(deviceId)
     routeAudioToDevice(deviceId)
     if (onDeviceChange) {
@@ -66,7 +62,7 @@ export default function AudioOutputSelector({ onDeviceChange }: AudioOutputSelec
           <span className={styles.warning}>⚠️ Audio routing not fully supported</span>
         )}
       </div>
-      
+
       {isSupported ? (
         <div className={styles.selector}>
           <select
@@ -112,4 +108,3 @@ export default function AudioOutputSelector({ onDeviceChange }: AudioOutputSelec
     </div>
   )
 }
-
