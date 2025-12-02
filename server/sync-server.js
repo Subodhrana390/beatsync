@@ -78,13 +78,20 @@ function joinRoom(socket, roomId) {
   const room = createRoom(roomId);
   socket.join(roomId);
 
-  // Store client information
+    // Store client information with mobile detection
+  const userAgent = socket.handshake.headers['user-agent'] || '';
+  const isMobile = /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+  const isIOS = /iPhone|iPad|iPod/i.test(userAgent);
+  const isAndroid = /Android/i.test(userAgent);
+
   room.clients.set(socket.id, {
     id: socket.id,
     connectedAt: new Date(),
     lastSeen: new Date(),
-    userAgent: socket.handshake.headers['user-agent']?.substring(0, 50) + '...' || 'Unknown',
-    ready: false
+    userAgent: userAgent.substring(0, 50) + '...' || 'Unknown',
+    ready: false,
+    isMobile,
+    deviceType: isIOS ? 'iOS' : isAndroid ? 'Android' : isMobile ? 'Mobile' : 'Desktop'
   });
 
   console.log(`Client ${socket.id} joined room ${roomId}. Room clients: ${room.clients.size}`);

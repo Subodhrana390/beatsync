@@ -206,3 +206,110 @@
   font-weight: bold;
 }
 
+/* Hotspot section styles */
+.hotspotSection {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-top: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.hotspotSection h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+  color: #10b981;
+}
+
+.hotspotSection p {
+  margin: 0.5rem 0;
+  opacity: 0.9;
+}
+
+.hotspotGuide {
+  margin-top: 1rem;
+}
+
+.hotspotMethod {
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.hotspotMethod:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.hotspotMethod h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  color: #fbbf24;
+}
+
+.platformInstructions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.platform {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 0.25rem;
+  padding: 0.75rem;
+}
+
+.platform h5 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #10b981;
+}
+
+.platform ol {
+  margin: 0;
+  padding-left: 1rem;
+}
+
+.platform li {
+  margin: 0.25rem 0;
+  font-size: 0.85rem;
+  line-height: 1.3;
+}
+
+.hotspotTips {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.hotspotTips h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.95rem;
+  color: #fbbf24;
+}
+
+.hotspotTips ul {
+  margin: 0;
+  padding-left: 1rem;
+}
+
+.hotspotTips li {
+  margin: 0.25rem 0;
+  font-size: 0.85rem;
+  line-height: 1.3;
+}
+
+@media (max-width: 768px) {
+  .platformInstructions {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .hotspotSection {
+    padding: 0.75rem;
+  }
+}
+

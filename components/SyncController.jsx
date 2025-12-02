@@ -20,45 +20,64 @@ export default function SyncController({
 }) {
   const [isSyncing, setIsSyncing] = useState(false)
   const [connectedClients, setConnectedClients] = useState(0)
-  const [readyState, setReadyState] = useState({ readyCount: 0, totalCount: 0, allReady: false })
+  const [readyState, setReadyState] = useState({
+    readyCount: 0,
+    totalCount: 0,
+    allReady: false
+  })
   const [isClientReady, setIsClientReady] = useState(false)
   const [connectedClientList, setConnectedClientList] = useState([])
 
-  // Use refs to avoid dependency issues
   const socketRef = useRef(null)
-  const callbacksRef = useRef({ onPlayStateChange, onVideoChange, onTimeUpdate, onSyncTimestamp, onDurationUpdate })
+  const callbacksRef = useRef({
+    onPlayStateChange,
+    onVideoChange,
+    onTimeUpdate,
+    onSyncTimestamp,
+    onDurationUpdate
+  })
 
-  // Update refs when props change
   useEffect(() => {
-    callbacksRef.current = { onPlayStateChange, onVideoChange, onTimeUpdate, onSyncTimestamp, onDurationUpdate }
+    callbacksRef.current = {
+      onPlayStateChange,
+      onVideoChange,
+      onTimeUpdate,
+      onSyncTimestamp,
+      onDurationUpdate
+    }
   }, [onPlayStateChange, onVideoChange, onTimeUpdate, onSyncTimestamp, onDurationUpdate])
 
   useEffect(() => {
     socketRef.current = externalSocket
-    console.log('🔗 SyncController: Socket prop updated:', !!externalSocket, externalSocket?.connected)
+    console.log(
+      '🔗 SyncController: Socket prop updated:',
+      !!externalSocket,
+      externalSocket?.connected
+    )
   }, [externalSocket])
 
   useEffect(() => {
-    console.log('🔄 SyncController: Main useEffect triggered, socket available:', !!socketRef.current, 'isSyncing:', isSyncing)
+    console.log(
+      '🔄 SyncController: Main useEffect triggered, socket available:',
+      !!socketRef.current,
+      'isSyncing:',
+      isSyncing
+    )
 
     if (!socketRef.current) {
-      console.log('ℹ️ SyncController: No socket available (expected when not connected)')
+      console.log('ℹ️ SyncController: No socket available')
       setIsSyncing(false)
       setConnectedClients(0)
       return
     }
 
-    console.log('✅ SyncController: Socket available, setting up listeners')
-
     const socket = socketRef.current
 
-    // Reset sync state when room changes
     setIsSyncing(false)
     setConnectedClients(0)
 
     const handleConnect = () => {
       console.log('✅ SyncController: Connected to sync server')
-      // Don't automatically set isSyncing to true - wait for user to start sync
     }
 
     const handleDisconnect = () => {
@@ -77,55 +96,82 @@ export default function SyncController({
       if (state.videoId && callbacksRef.current.onVideoChange) {
         callbacksRef.current.onVideoChange(state.videoId)
       }
-      if (state.isPlaying !== undefined && callbacksRef.current.onPlayStateChange) {
+      if (
+        state.isPlaying !== undefined &&
+        callbacksRef.current.onPlayStateChange
+      ) {
         callbacksRef.current.onPlayStateChange(state.isPlaying)
       }
-      if (state.currentTime !== undefined && callbacksRef.current.onTimeUpdate) {
+      if (
+        state.currentTime !== undefined &&
+        callbacksRef.current.onTimeUpdate
+      ) {
         callbacksRef.current.onTimeUpdate(state.currentTime)
       }
-      // Update sync status based on server state
       setIsSyncing(state.isSyncing)
     }
 
     const handleSyncAll = (data) => {
-      console.log('🔄 SyncController: Sync all received:', data, 'isSyncing:', data.isSyncing)
+      console.log(
+        '🔄 SyncController: syncAll received:',
+        data,
+        'isSyncing:',
+        data.isSyncing
+      )
       if (data.videoId && callbacksRef.current.onVideoChange) {
         callbacksRef.current.onVideoChange(data.videoId)
       }
-      if (data.isPlaying !== undefined && callbacksRef.current.onPlayStateChange) {
+      if (
+        data.isPlaying !== undefined &&
+        callbacksRef.current.onPlayStateChange
+      ) {
         callbacksRef.current.onPlayStateChange(data.isPlaying)
       }
-      if (data.currentTime !== undefined && callbacksRef.current.onTimeUpdate) {
+      if (
+        data.currentTime !== undefined &&
+        callbacksRef.current.onTimeUpdate
+      ) {
         callbacksRef.current.onTimeUpdate(data.currentTime)
       }
-      if (data.timestamp !== undefined && callbacksRef.current.onSyncTimestamp) {
+      if (
+        data.timestamp !== undefined &&
+        callbacksRef.current.onSyncTimestamp
+      ) {
         callbacksRef.current.onSyncTimestamp(data.timestamp)
       }
-      if (data.duration !== undefined && callbacksRef.current.onDurationUpdate) {
+      if (
+        data.duration !== undefined &&
+        callbacksRef.current.onDurationUpdate
+      ) {
         callbacksRef.current.onDurationUpdate(data.duration)
       }
-      // Update sync status
-      console.log('🔄 SyncController: Setting isSyncing to:', data.isSyncing)
+
       setIsSyncing(data.isSyncing)
     }
 
     const handleSyncPlay = (data) => {
-      console.log(`📥 SyncController: Received syncPlay: time=${data.time}s, playing=${data.isPlaying}`)
+      console.log(
+        `📥 SyncController: Received syncPlay: time=${data.time}s, playing=${data.isPlaying}`
+      )
       if (data.videoId && callbacksRef.current.onVideoChange) {
-        console.log(`🎬 SyncController: Updating video to ${data.videoId}`)
         callbacksRef.current.onVideoChange(data.videoId)
       }
-      if (data.isPlaying !== undefined && callbacksRef.current.onPlayStateChange) {
-        console.log(`▶️ SyncController: Updating play state to ${data.isPlaying}`)
+      if (
+        data.isPlaying !== undefined &&
+        callbacksRef.current.onPlayStateChange
+      ) {
         callbacksRef.current.onPlayStateChange(data.isPlaying)
       }
-      if (data.time !== undefined && callbacksRef.current.onTimeUpdate) {
-        console.log(`⏱️ SyncController: Updating time to ${data.time}s (was syncTime previously set?)`)
-        console.log(`📊 SyncController: Broadcasting time update to YouTubePlayer`)
+      if (
+        data.time !== undefined &&
+        callbacksRef.current.onTimeUpdate
+      ) {
         callbacksRef.current.onTimeUpdate(data.time)
       }
-      if (data.duration !== undefined && callbacksRef.current.onDurationUpdate) {
-        console.log(`📏 SyncController: Updating duration to ${data.duration}s`)
+      if (
+        data.duration !== undefined &&
+        callbacksRef.current.onDurationUpdate
+      ) {
         callbacksRef.current.onDurationUpdate(data.duration)
       }
     }
@@ -154,7 +200,6 @@ export default function SyncController({
       if (callbacksRef.current.onDurationUpdate) {
         callbacksRef.current.onDurationUpdate(data.duration)
       }
-      // Reset ready state when preparing for new sync
       setIsClientReady(false)
     }
 
@@ -194,7 +239,7 @@ export default function SyncController({
       socket.off('prepareSync', handlePrepareSync)
       socket.off('clientListUpdate', handleClientListUpdate)
     }
-  }, []) // Empty dependency array - only run once on mount
+  }, []) // run once
 
   // Auto-report ready state when player becomes ready
   useEffect(() => {
@@ -209,7 +254,7 @@ export default function SyncController({
     }
   }, [playerReady, isClientReady, roomId])
 
-  // Send heartbeat every 30 seconds to indicate client is still active
+  // Heartbeat
   useEffect(() => {
     if (!socketRef.current || !roomId) return
 
@@ -217,39 +262,31 @@ export default function SyncController({
       if (socketRef.current && socketRef.current.connected) {
         socketRef.current.emit('heartbeat')
       }
-    }, 30000) // 30 seconds
+    }, 30000)
 
     return () => clearInterval(heartbeatInterval)
   }, [roomId])
 
-  useEffect(() => {
-    // Broadcast play state changes when in a room (for seek synchronization)
-    if (socketRef.current && roomId) {
-      console.log(`📡 SyncController: Broadcasting playStateChange - time: ${syncTime}s, playing: ${isPlaying}, room: ${roomId}`)
-      socketRef.current.emit('playStateChange', {
-        videoId,
-        isPlaying,
-        time: syncTime,
-        duration,
-      })
-      console.log(`📤 SyncController: playStateChange emitted to server`)
-    } else {
-      console.log(`🚫 SyncController: Not broadcasting - socket: ${!!socketRef.current}, roomId: ${roomId}`)
-    }
-  }, [roomId, videoId, isPlaying, syncTime, duration]) // Broadcast whenever roomId exists
+  // 🚫 IMPORTANT: removed the auto-broadcast useEffect that was sending
+  // playStateChange on every isPlaying/syncTime change.
+  // This prevents echo loops and double-seek problems.
 
   const startSync = () => {
     if (socketRef.current && videoId && roomId) {
-      console.log('▶️ SyncController: Starting sync for room:', roomId, 'video:', videoId)
-      // Optimistically update UI immediately for better UX
+      console.log(
+        '▶️ SyncController: Starting sync for room:',
+        roomId,
+        'video:',
+        videoId
+      )
       setIsSyncing(true)
       socketRef.current.emit('startSync', {
         videoId,
         time: syncTime,
         isPlaying: true,
+        duration,
+        timestamp: Date.now()
       })
-      console.log('📤 SyncController: Emitted startSync, UI updated optimistically')
-      // Also update local play state
       if (callbacksRef.current.onPlayStateChange) {
         callbacksRef.current.onPlayStateChange(true)
       }
@@ -273,19 +310,15 @@ export default function SyncController({
   const syncAll = () => {
     if (socketRef.current && videoId && roomId) {
       console.log('🔄 SyncController: Syncing all devices in room:', roomId)
-      // Use timestamp-based sync to account for network latency
       const syncTimestamp = Date.now()
-      // Optimistically update UI immediately for better UX
       setIsSyncing(true)
       socketRef.current.emit('syncAll', {
         videoId,
         time: syncTime,
         duration,
         isPlaying: true,
-        timestamp: syncTimestamp, // Add timestamp for latency compensation
+        timestamp: syncTimestamp,
       })
-      console.log('📤 SyncController: Emitted syncAll with timestamp, UI updated optimistically')
-      // Also update local play state
       if (callbacksRef.current.onPlayStateChange) {
         callbacksRef.current.onPlayStateChange(true)
       }
@@ -294,7 +327,10 @@ export default function SyncController({
 
   const syncWhenReady = () => {
     if (socketRef.current && videoId && roomId) {
-      console.log('🔄 SyncController: Syncing when all devices are ready in room:', roomId)
+      console.log(
+        '🔄 SyncController: Syncing when all devices are ready in room:',
+        roomId
+      )
       const syncTimestamp = Date.now()
       socketRef.current.emit('syncWhenReady', {
         videoId,
@@ -302,8 +338,6 @@ export default function SyncController({
         duration,
         timestamp: syncTimestamp,
       })
-      console.log('📤 SyncController: Emitted syncWhenReady')
-      // Don't update local state yet - wait for server to confirm all are ready
     }
   }
 
@@ -318,31 +352,47 @@ export default function SyncController({
         </div>
         <div className={styles.statusRow}>
           <span>Connection:</span>
-          <span className={socketRef.current?.connected ? styles.connected : styles.disconnected}>
+          <span
+            className={
+              socketRef.current?.connected
+                ? styles.connected
+                : styles.disconnected
+            }
+          >
             {socketRef.current?.connected ? '🟢 Connected' : '🔴 Disconnected'}
           </span>
         </div>
         {connectedClients > 0 && (
           <>
             <div className={styles.clientCount}>
-              {connectedClients} device{connectedClients !== 1 ? 's' : ''} connected
+              {connectedClients} device
+              {connectedClients !== 1 ? 's' : ''} connected
             </div>
             {connectedClientList.length > 0 && (
               <div className={styles.clientList}>
-                <div className={styles.clientListHeader}>Connected Devices:</div>
+                <div className={styles.clientListHeader}>
+                  Connected Devices:
+                </div>
                 {connectedClientList.map((client) => (
                   <div key={client.id} className={styles.clientItem}>
-                    <span className={`${styles.clientStatus} ${client.ready ? styles.ready : styles.notReady}`}>
+                    <span
+                      className={`${styles.clientStatus} ${
+                        client.ready ? styles.ready : styles.notReady
+                      }`}
+                    >
                       {client.ready ? '🟢' : '🔴'}
                     </span>
                     <span className={styles.clientInfo}>
                       Device {client.id.slice(-4)}
                       <span className={styles.clientDetails}>
-                        {client.userAgent.split(' ')[0]} • {new Date(client.connectedAt).toLocaleTimeString()}
+                        {client.userAgent.split(' ')[0]} •{' '}
+                        {new Date(client.connectedAt).toLocaleTimeString()}
                       </span>
                     </span>
                     <span className={styles.connectionIndicator}>
-                      {new Date() - new Date(client.lastSeen) < 60000 ? '🟢' : '🟡'}
+                      {new Date() - new Date(client.lastSeen) < 60000
+                        ? '🟢'
+                        : '🟡'}
                     </span>
                   </div>
                 ))}
@@ -351,7 +401,11 @@ export default function SyncController({
             {connectedClients > 1 && (
               <div className={styles.readyState}>
                 <span>Ready Status:</span>
-                <span className={readyState.allReady ? styles.allReady : styles.waiting}>
+                <span
+                  className={
+                    readyState.allReady ? styles.allReady : styles.waiting
+                  }
+                >
                   {readyState.readyCount}/{readyState.totalCount} ready
                   {readyState.allReady ? ' ✅' : ' ⏳'}
                 </span>
@@ -361,8 +415,7 @@ export default function SyncController({
         )}
         {process.env.NODE_ENV === 'development' && (
           <div className={styles.debugInfo}>
-            Socket: {socketRef.current ? '✅' : '❌'} |
-            Room: {roomId || 'None'} |
+            Socket: {socketRef.current ? '✅' : '❌'} | Room: {roomId || 'None'} |{' '}
             Video: {videoId || 'None'}
           </div>
         )}
@@ -385,7 +438,9 @@ export default function SyncController({
         </button>
         {connectedClients > 1 && (
           <button
-            className={`${styles.button} ${readyState.allReady ? styles.readyButton : styles.waitingButton}`}
+            className={`${styles.button} ${
+              readyState.allReady ? styles.readyButton : styles.waitingButton
+            }`}
             onClick={syncWhenReady}
             disabled={!socketRef.current || !videoId || !roomId}
           >
@@ -395,7 +450,9 @@ export default function SyncController({
         <button
           className={`${styles.button} ${styles.testButton}`}
           onClick={() => {
-            console.log('🧪 Manual seek sync test: setting syncTime to 30s')
+            console.log(
+              '🧪 Manual seek sync test: setting syncTime to 30s (local only)'
+            )
             if (callbacksRef.current.onTimeUpdate) {
               callbacksRef.current.onTimeUpdate(30)
             }
@@ -418,8 +475,7 @@ export default function SyncController({
         <div className={styles.warning}>
           {!roomId
             ? '⚠️ Join or create a room first to enable sync controls.'
-            : '⚠️ Not connected to sync server. Make sure you\'re connected to a room.'
-          }
+            : "⚠️ Not connected to sync server. Make sure you're connected to a room."}
         </div>
       )}
 
@@ -427,6 +483,10 @@ export default function SyncController({
         <p>💡 Sync ensures all connected devices play audio in perfect synchronization.</p>
         <p>📡 Uses WebSocket for real-time communication between devices.</p>
         <p>🔊 Works with any audio output - Bluetooth speakers, built-in speakers, or headphones.</p>
+        <p>📶 <strong>Flexible Connections:</strong> Works on same Wi-Fi network OR same mobile hotspot.</p>
+        {connectedClients > 1 && (
+          <p className={styles.mobileReady}>🎵 Perfect sync across all connected devices!</p>
+        )}
       </div>
     </div>
   )

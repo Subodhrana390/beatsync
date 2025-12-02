@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useRef, useState, useCallback } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import styles from './YouTubePlayer.module.css'
 
 export default function YouTubePlayer({
@@ -18,16 +18,15 @@ export default function YouTubePlayer({
   onSeek,
   onPlayerReady,
 }) {
-  const playerRef = useRef(null)
   const containerRef = useRef(null)
   const playerInstanceRef = useRef(null)
+
   const [ytReady, setYtReady] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [volume, setVolume] = useState(100)
   const [muted, setMuted] = useState(false)
   const [playerError, setPlayerError] = useState(null)
-  const [isSeeking, setIsSeeking] = useState(false)
 
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
@@ -37,11 +36,14 @@ export default function YouTubePlayer({
   const [nowChannel, setNowChannel] = useState(null)
   const [nowThumb, setNowThumb] = useState(null)
 
-  // Seek detection variables
+  // Seek/sync tracking
   const lastBroadcastedTimeRef = useRef(0)
   const lastKnownTimeRef = useRef(0)
   const isUserSeekingRef = useRef(false)
   const lastSeekBroadcastTimeRef = useRef(0)
+
+  // NEW: prevent echo / re-broadcast while applying remote sync
+  const ignoreSyncRef = useRef(false)
 
   // Load YouTube IFrame API
   useEffect(() => {
@@ -62,7 +64,7 @@ export default function YouTubePlayer({
     }
   }, [])
 
-  // Create player when YouTube API is ready
+  // Create player when API is ready
   useEffect(() => {
     if (!ytReady || !containerRef.current || playerInstanceRef.current) return
 
@@ -83,23 +85,44 @@ export default function YouTubePlayer({
           onPlayerReady?.(true)
         },
         onStateChange: (event) => {
-          if (event.data === window.YT.PlayerState.PLAYING) {
-            onPlayStateChange(true)
-            // Broadcast real-time play state change
-            const currentTime = playerInstanceRef.current.getCurrentTime()
-            broadcastPlayStateChange(true, currentTime)
-          } else if (event.data === window.YT.PlayerState.PAUSED ||
-                     event.data === window.YT.PlayerState.ENDED) {
-            onPlayStateChange(false)
-            // Broadcast real-time pause state change
-            const currentTime = playerInstanceRef.current.getCurrentTime()
-            broadcastPlayStateChange(false, currentTime)
-          } else if (event.data === window.YT.PlayerState.BUFFERING) {
-            // Buffering often indicates a seek operation
-            console.log('⏳ Player buffering (possible seek operation)')
-          } else if (event.data === window.YT.PlayerState.CUED) {
-            // Video cued and ready to play
-            console.log('🎬 Video cued and ready')
+          if (!playerInstanceRef.current) return
+
+          const ytState = window.YT.PlayerState
+          const isPlayingNow =
+            event.data === ytState.PLAYING ||
+            event.data === ytState.BUFFERING // buffering → still considered playing direction
+
+          // Always update app play state
+          if (event.data === ytState.PLAYING) {
+            onPlayStateChange?.(true)
+          } else if (
+            event.data === ytState.PAUSED ||
+            event.data === ytState.ENDED
+          ) {
+            onPlayStateChange?.(false)
+          }
+
+          // If we are applying remote sync, do NOT broadcast back (prevents echo)
+          if (ignoreSyncRef.current) {
+            return
+          }
+
+          // For local play/pause via iframe OR external button,
+          // broadcast to other devices
+          if (
+            event.data === ytState.PLAYING ||
+            event.data === ytState.PAUSED ||
+            event.data === ytState.ENDED
+          ) {
+            try {
+              const current = playerInstanceRef.current.getCurrentTime()
+              broadcastPlayStateChange(isPlayingNow, current)
+            } catch {
+              // ignore
+            }
+          }
+
+          if (event.data === ytState.CUED) {
             lastKnownTimeRef.current = 0
             lastBroadcastedTimeRef.current = 0
           }
@@ -109,7 +132,8 @@ export default function YouTubePlayer({
           if (error.data === 2) errorMessage = 'Invalid video ID'
           else if (error.data === 5) errorMessage = 'HTML5 player error'
           else if (error.data === 100) errorMessage = 'Video not found'
-          else if (error.data === 101 || error.data === 150) errorMessage = 'Video embedding disabled'
+          else if (error.data === 101 || error.data === 150)
+            errorMessage = 'Video embedding disabled'
           setPlayerError(errorMessage)
         }
       }
@@ -120,23 +144,22 @@ export default function YouTubePlayer({
   useEffect(() => {
     if (!playerInstanceRef.current || !videoId) return
 
-    const loadVideo = () => {
-      try {
-        playerInstanceRef.current.loadVideoById(videoId)
-        setPlayerError(null)
-      } catch (error) {
-        setPlayerError('Failed to load video')
-      }
+    try {
+      playerInstanceRef.current.loadVideoById(videoId)
+      setPlayerError(null)
+    } catch (error) {
+      console.error('loadVideo error:', error)
+      setPlayerError('Failed to load video')
     }
-
-    loadVideo()
   }, [videoId])
 
-  // Handle play/pause
+  // Handle play/pause from external state (host or sync controller)
   useEffect(() => {
     if (!playerInstanceRef.current) return
 
     try {
+      // This may be triggered by local OR remote updates,
+      // but we do NOT set ignoreSyncRef here – we rely on onStateChange guard.
       if (isPlaying) {
         playerInstanceRef.current.playVideo()
       } else {
@@ -147,7 +170,7 @@ export default function YouTubePlayer({
     }
   }, [isPlaying])
 
-  // Handle seek
+  // Handle sync seek with timestamp-based latency compensation
   useEffect(() => {
     if (!playerInstanceRef.current || !syncTimestamp) return
 
@@ -157,74 +180,99 @@ export default function YouTubePlayer({
     const adjustedTime = Math.max(0, syncTime + latencySeconds)
 
     try {
-      // Prevent seek detection from triggering for sync seeks
+      // Mark as remote sync – avoid rebroadcast / detection
+      ignoreSyncRef.current = true
       isUserSeekingRef.current = true
+
       playerInstanceRef.current.seekTo(adjustedTime, true)
       lastKnownTimeRef.current = adjustedTime
       lastBroadcastedTimeRef.current = adjustedTime
 
-      console.log(`🔄 Applied sync seek to ${adjustedTime.toFixed(1)}s (latency: ${latencySeconds.toFixed(1)}s)`)
+      console.log(
+        `🔄 Applied sync seek to ${adjustedTime.toFixed(
+          1
+        )}s (latency: ${latencySeconds.toFixed(1)}s)`
+      )
 
-      // Re-enable seek detection after a delay
       setTimeout(() => {
         isUserSeekingRef.current = false
+        ignoreSyncRef.current = false
       }, 1000)
     } catch (error) {
       console.error('Sync seek error:', error)
+      ignoreSyncRef.current = false
+      isUserSeekingRef.current = false
     }
   }, [syncTime, syncTimestamp])
 
-  // Real-time control listeners
+  // Real-time control listeners (syncPlay, volumeChange)
   useEffect(() => {
     if (!socket || !roomId) return
 
     const handleIncomingPlayStateChange = (data) => {
-      console.log('📥 Received real-time playStateChange:', data)
+      if (!playerInstanceRef.current) return
+      console.log('📥 Received syncPlay:', data)
+
       try {
-        // Prevent echo by temporarily disabling seek detection
+        // Mark this as remote – prevent echo back
+        ignoreSyncRef.current = true
         isUserSeekingRef.current = true
 
-        if (data.isPlaying !== undefined && playerInstanceRef.current) {
+        if (data.videoId && data.videoId !== videoId) {
+          onVideoChange?.(data.videoId)
+        }
+
+        if (typeof data.isPlaying === 'boolean') {
           if (data.isPlaying) {
             playerInstanceRef.current.playVideo()
+            onPlayStateChange?.(true)
           } else {
             playerInstanceRef.current.pauseVideo()
+            onPlayStateChange?.(false)
           }
         }
-        if (data.time !== undefined && playerInstanceRef.current) {
+
+        if (typeof data.time === 'number') {
           playerInstanceRef.current.seekTo(data.time, true)
           lastKnownTimeRef.current = data.time
           lastBroadcastedTimeRef.current = data.time
         }
 
-        // Re-enable seek detection after a delay
+        if (typeof data.duration === 'number') {
+          onDurationUpdate?.(data.duration)
+        }
+      } catch (error) {
+        console.error('Error applying syncPlay:', error)
+      } finally {
         setTimeout(() => {
           isUserSeekingRef.current = false
-        }, 1000)
-      } catch (error) {
-        console.error('Error applying real-time playStateChange:', error)
+          ignoreSyncRef.current = false
+        }, 800)
       }
     }
 
     const handleIncomingVolumeChange = (data) => {
-      console.log('📥 Received real-time volumeChange:', data)
+      console.log('📥 Received volumeChange:', data)
       try {
-        if (data.volume !== undefined && playerInstanceRef.current) {
+        if (!playerInstanceRef.current) return
+
+        ignoreSyncRef.current = true
+
+        if (typeof data.volume === 'number') {
           playerInstanceRef.current.setVolume(data.volume)
           setVolume(data.volume)
         }
-        if (data.muted !== undefined) {
+        if (typeof data.muted === 'boolean') {
           setMuted(data.muted)
-          if (playerInstanceRef.current) {
-            if (data.muted) {
-              playerInstanceRef.current.mute()
-            } else {
-              playerInstanceRef.current.unMute()
-            }
-          }
+          if (data.muted) playerInstanceRef.current.mute()
+          else playerInstanceRef.current.unMute()
         }
       } catch (error) {
-        console.error('Error applying real-time volumeChange:', error)
+        console.error('Error applying volumeChange:', error)
+      } finally {
+        setTimeout(() => {
+          ignoreSyncRef.current = false
+        }, 400)
       }
     }
 
@@ -235,9 +283,9 @@ export default function YouTubePlayer({
       socket.off('syncPlay', handleIncomingPlayStateChange)
       socket.off('volumeChange', handleIncomingVolumeChange)
     }
-  }, [socket, roomId])
+  }, [socket, roomId, videoId, onVideoChange, onPlayStateChange, onDurationUpdate])
 
-  // Update time and duration with seek detection
+  // Poll current time + detect manual seek
   useEffect(() => {
     if (!playerInstanceRef.current) return
 
@@ -246,52 +294,52 @@ export default function YouTubePlayer({
         const time = playerInstanceRef.current.getCurrentTime()
         const dur = playerInstanceRef.current.getDuration()
 
-        if (time !== undefined) {
+        if (typeof time === 'number') {
           const lastTime = lastKnownTimeRef.current
           const timeDiff = Math.abs(time - lastTime)
 
-          // Detect manual seeking with improved logic:
-          // - Time difference > 2 seconds (not just playback drift)
-          // - Time difference < 2 hours (avoid false positives)
-          // - Not currently processing a programmatic seek
-          // - Debounce broadcasts to prevent spam (minimum 500ms between broadcasts)
           const now = Date.now()
           const timeSinceLastSeekBroadcast = now - lastSeekBroadcastTimeRef.current
 
-          if (timeDiff > 2 &&
-              timeDiff < 7200 && // 2 hours max
-              !isUserSeekingRef.current &&
-              timeSinceLastSeekBroadcast > 500) { // Minimum 500ms between broadcasts
+          // Manual seek detection (user drag/skip in YT UI)
+          if (
+            timeDiff > 2 &&
+            timeDiff < 7200 &&
+            !isUserSeekingRef.current &&
+            !ignoreSyncRef.current &&
+            timeSinceLastSeekBroadcast > 500
+          ) {
+            console.log(
+              `🔍 Manual seek detected: ${lastTime.toFixed(1)}s → ${time.toFixed(
+                1
+              )}s`
+            )
 
-            console.log(`🔍 Detected manual seek: ${lastTime.toFixed(1)}s → ${time.toFixed(1)}s (${timeDiff.toFixed(1)}s difference)`)
             isUserSeekingRef.current = true
-
-            // Broadcast the seek immediately
             broadcastSeek(time)
             lastBroadcastedTimeRef.current = time
             lastSeekBroadcastTimeRef.current = now
 
-            // Reset seeking flag after a delay
             setTimeout(() => {
               isUserSeekingRef.current = false
-            }, 1000) // Slightly longer to prevent double detection
+            }, 1000)
           }
 
           lastKnownTimeRef.current = time
           setCurrentTime(time)
-          onTimeUpdate(time)
+          onTimeUpdate?.(time)
         }
 
         if (dur && dur > 0) {
           setDuration(dur)
           onDurationUpdate?.(dur)
         }
-      } catch (error) {
-        // Ignore errors during updates
+      } catch {
+        // ignore
       }
     }
 
-    const interval = setInterval(updateInfo, 200) // Check every 200ms for better responsiveness
+    const interval = setInterval(updateInfo, 200)
     return () => clearInterval(interval)
   }, [onTimeUpdate, onDurationUpdate])
 
@@ -306,24 +354,29 @@ export default function YouTubePlayer({
     if (!playerInstanceRef.current) return
 
     const current = playerInstanceRef.current.getCurrentTime()
-    const newTime = direction === 'forward' ? current + 10 : Math.max(0, current - 10)
+    const newTime =
+      direction === 'forward' ? current + 10 : Math.max(0, current - 10)
 
     try {
-      // Prevent seek detection from triggering for programmatic seeks
+      ignoreSyncRef.current = true
       isUserSeekingRef.current = true
+
       playerInstanceRef.current.seekTo(newTime, true)
       onSeek?.(newTime)
-      // Broadcast real-time seek
+
       broadcastSeek(newTime)
+
       lastKnownTimeRef.current = newTime
       lastBroadcastedTimeRef.current = newTime
 
-      // Re-enable seek detection after a delay
       setTimeout(() => {
         isUserSeekingRef.current = false
-      }, 1000)
+        ignoreSyncRef.current = false
+      }, 800)
     } catch (error) {
       console.error('Seek error:', error)
+      ignoreSyncRef.current = false
+      isUserSeekingRef.current = false
     }
   }
 
@@ -338,7 +391,6 @@ export default function YouTubePlayer({
         playerInstanceRef.current.unMute()
         setMuted(false)
       }
-      // Broadcast real-time volume change
       broadcastVolumeChange(newVolume, willBeMuted)
     } catch (error) {
       console.error('Volume error:', error)
@@ -352,12 +404,10 @@ export default function YouTubePlayer({
       if (muted) {
         playerInstanceRef.current.unMute()
         setMuted(false)
-        // Broadcast real-time unmute
         broadcastVolumeChange(volume, false)
       } else {
         playerInstanceRef.current.mute()
         setMuted(true)
-        // Broadcast real-time mute
         broadcastVolumeChange(volume, true)
       }
     } catch (error) {
@@ -365,39 +415,47 @@ export default function YouTubePlayer({
     }
   }
 
-  // Real-time control broadcasting functions
+  // === Broadcasting helpers (guarded by ignoreSyncRef) ===
+
   const broadcastPlayStateChange = (playing, currentTime) => {
-    if (socket && roomId) {
-      console.log(`📡 Broadcasting playStateChange: playing=${playing}, time=${currentTime}`)
-      socket.emit('playStateChange', {
-        videoId,
-        isPlaying: playing,
-        time: currentTime,
-        duration,
-      })
-    }
+    if (!socket || !roomId) return
+    if (ignoreSyncRef.current) return
+
+    console.log(
+      `📡 Broadcasting playStateChange: playing=${playing}, time=${currentTime}`
+    )
+    socket.emit('playStateChange', {
+      videoId,
+      isPlaying: playing,
+      time: currentTime,
+      duration: duration || syncDuration || 0,
+    })
   }
 
   const broadcastSeek = (time) => {
-    if (socket && roomId) {
-      console.log(`📡 Broadcasting seek: time=${time}`)
-      socket.emit('playStateChange', {
-        videoId,
-        isPlaying,
-        time,
-        duration,
-      })
-    }
+    if (!socket || !roomId) return
+    if (ignoreSyncRef.current) return
+
+    console.log(`📡 Broadcasting seek: time=${time}`)
+    socket.emit('playStateChange', {
+      videoId,
+      isPlaying,
+      time,
+      duration: duration || syncDuration || 0,
+    })
   }
 
   const broadcastVolumeChange = (newVolume, isMuted) => {
-    if (socket && roomId) {
-      console.log(`📡 Broadcasting volume change: volume=${newVolume}, muted=${isMuted}`)
-      socket.emit('volumeChange', {
-        volume: newVolume,
-        muted: isMuted,
-      })
-    }
+    if (!socket || !roomId) return
+    if (ignoreSyncRef.current) return
+
+    console.log(
+      `📡 Broadcasting volume change: volume=${newVolume}, muted=${isMuted}`
+    )
+    socket.emit('volumeChange', {
+      volume: newVolume,
+      muted: isMuted,
+    })
   }
 
   const searchYouTube = async () => {
@@ -406,7 +464,7 @@ export default function YouTubePlayer({
 
     const isValidId = /^[a-zA-Z0-9_-]{11}$/.test(q)
     if (isValidId) {
-      onVideoChange(q)
+      onVideoChange?.(q)
       setSearchQuery('')
       return
     }
@@ -421,13 +479,17 @@ export default function YouTubePlayer({
         return
       }
 
-      const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=10&q=${encodeURIComponent(q)}&key=${KEY}`
+      const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=10&q=${encodeURIComponent(
+        q
+      )}&key=${KEY}`
 
       const response = await fetch(url, { headers: { Accept: 'application/json' } })
 
       if (!response.ok) {
-        if (response.status === 403) setPlayerError('YouTube API quota exceeded or key invalid')
-        else if (response.status === 429) setPlayerError('Too many requests')
+        if (response.status === 403)
+          setPlayerError('YouTube API quota exceeded or key invalid')
+        else if (response.status === 429)
+          setPlayerError('Too many requests')
         else setPlayerError(`Search failed (HTTP ${response.status})`)
         return
       }
@@ -441,6 +503,7 @@ export default function YouTubePlayer({
 
       setSearchResults(data.items)
     } catch (error) {
+      console.error('Search error:', error)
       setPlayerError('Search failed due to network error')
     } finally {
       setSearching(false)
@@ -455,12 +518,13 @@ export default function YouTubePlayer({
     setNowChannel(item.snippet.channelTitle)
     setNowThumb(item.snippet.thumbnails?.high?.url)
 
-    onVideoChange(id)
+    onVideoChange?.(id)
     setSearchResults([])
     setSearchQuery('')
   }
 
-  const thumb = nowThumb || (videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null)
+  const thumb =
+    nowThumb || (videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null)
 
   return (
     <div className={styles.container}>
@@ -478,7 +542,9 @@ export default function YouTubePlayer({
 
         <div className={styles.info}>
           <div className={styles.title}>{nowTitle || 'No track selected'}</div>
-          <div className={styles.channel}>{nowChannel || 'Search YouTube Music'}</div>
+          <div className={styles.channel}>
+            {nowChannel || 'Search YouTube Music'}
+          </div>
 
           <div className={styles.controlsRow}>
             <button
@@ -486,26 +552,18 @@ export default function YouTubePlayer({
               className={styles.playPauseBtn}
               onClick={() => {
                 const newPlayingState = !isPlaying
-                onPlayStateChange(newPlayingState)
-                // Broadcast real-time play/pause
-                const currentTime = playerInstanceRef.current?.getCurrentTime() || 0
-                broadcastPlayStateChange(newPlayingState, currentTime)
+                // Just update app state – onStateChange will broadcast
+                onPlayStateChange?.(newPlayingState)
               }}
             >
               {isPlaying ? '⏸' : '▶'}
             </button>
 
             <div className={styles.seekGroup}>
-              <button
-                disabled={!ytReady}
-                onClick={() => handleSeek('backward')}
-              >
+              <button disabled={!ytReady} onClick={() => handleSeek('backward')}>
                 -10s
               </button>
-              <button
-                disabled={!ytReady}
-                onClick={() => handleSeek('forward')}
-              >
+              <button disabled={!ytReady} onClick={() => handleSeek('forward')}>
                 +10s
               </button>
             </div>
@@ -516,10 +574,7 @@ export default function YouTubePlayer({
           </div>
 
           <div className={styles.volumeRow}>
-            <button
-              disabled={!ytReady}
-              onClick={toggleMute}
-            >
+            <button disabled={!ytReady} onClick={toggleMute}>
               {muted ? '🔇' : '🔊'}
             </button>
 
@@ -559,11 +614,15 @@ export default function YouTubePlayer({
             >
               <div
                 className={styles.resultThumb}
-                style={{ backgroundImage: `url(${item.snippet.thumbnails?.medium?.url})` }}
+                style={{
+                  backgroundImage: `url(${item.snippet.thumbnails?.medium?.url})`,
+                }}
               />
               <div>
                 <div className={styles.resultTitle}>{item.snippet.title}</div>
-                <div className={styles.resultChannel}>{item.snippet.channelTitle}</div>
+                <div className={styles.resultChannel}>
+                  {item.snippet.channelTitle}
+                </div>
               </div>
             </div>
           ))}

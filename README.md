@@ -1,14 +1,15 @@
-# BeatSync - Multi-Device Bluetooth Speaker Sync
+# BeatSync - Multi-Device Audio Sync
 
-A Next.js application that synchronizes music playback across multiple phones connected to Bluetooth speakers, with YouTube integration.
+A Next.js application that synchronizes music playback across multiple devices, with YouTube integration and flexible audio output support.
 
 ## Features
 
 - 🎵 YouTube music playback
-- 📱 Multi-device synchronization
-- 🔊 Bluetooth speaker support
+- 📱 Multi-device synchronization (Wi-Fi or Mobile Hotspot)
+- 🔊 Flexible audio output support
 - ⚡ Real-time audio sync
 - 🎛️ Centralized playback control
+- 📶 Flexible network connectivity
 
 ## Getting Started
 
@@ -51,23 +52,41 @@ npm run dev:all
 
 ## How It Works
 
-1. **Open the App**: Open the app on multiple devices (phones/tablets/computers)
-2. **Select Audio Output** (Optional): Use the Audio Output selector to choose your preferred audio device (Bluetooth speaker, built-in speakers, headphones, etc.)
-3. **Connect Bluetooth** (Optional): If you want to use Bluetooth speakers, connect them via system settings first, then select them in the Audio Output section
+1. **Choose Connection Method**: Use same Wi-Fi network OR same mobile hotspot
+2. **Open the App**: Open the app on multiple devices (phones/tablets/computers)
+3. **Configure Audio Output**: Use system settings to select your preferred audio device (speakers, headphones, etc.)
 4. **Search Music**: Use the YouTube Player to search for music
 5. **Start Sync**: Click "Start Sync" to begin synchronized playback
-6. **Control Playback**: All devices will play in perfect sync through their selected audio output devices
+6. **Control Playback**: All devices will play in perfect sync through their configured audio outputs
 
-**Note**: Bluetooth connection is completely optional. The app works with any audio output device!
+**Note**: Audio output is configured through your device's system settings. The app works with any connected audio device!
 
-### Audio Output Routing
+### Connection Methods
 
-The app includes an Audio Output Selector that allows you to choose any audio output device:
+BeatSync supports two connection methods for device synchronization:
 
-- **Chrome/Edge**: Supports `setSinkId()` API for routing audio to specific output devices (Bluetooth speakers, headphones, built-in speakers, etc.)
-- **YouTube Iframe**: Direct audio routing to YouTube iframes is limited by CORS, but the system default audio output will be used
-- **Fallback**: If browser doesn't support audio routing, users should select their preferred audio output device in their system settings
-- **No Bluetooth Required**: The app works perfectly with built-in speakers, wired headphones, or any other audio output device
+#### 🏠 Wi-Fi Network
+- All devices connect to the same home/office Wi-Fi network
+- Most stable and reliable connection
+- Best for large groups and extended use
+- Server IP typically starts with 192.168.x.x or 10.x.x.x
+
+#### 📶 Mobile Hotspot
+- One mobile device creates a hotspot that others connect to
+- Perfect for outdoor use or when Wi-Fi isn't available
+- Supports 5-10 connected devices (depending on phone model)
+- Server IP typically starts with 192.168.43.x or 172.20.10.x
+
+**Both methods provide identical synchronization quality!**
+
+### Audio Output Configuration
+
+The app works with your system's audio output configuration:
+
+- **Desktop Browsers**: The Audio Output Selector allows programmatic routing to specific devices (speakers, headphones, etc.)
+- **Mobile Devices**: Audio output is controlled through system settings due to browser security restrictions
+- **System Integration**: All audio devices connected to your system are supported
+- **No Special Setup**: Works with built-in speakers, external speakers, headphones, or any audio output device
 
 ## Architecture
 
@@ -79,8 +98,10 @@ The app includes an Audio Output Selector that allows you to choose any audio ou
 ## Requirements
 
 - Modern browser (Chrome, Edge, Firefox, Safari)
-- HTTPS connection (required for Web Bluetooth, if using Bluetooth features)
-- Multiple devices (phones/tablets/computers) - Bluetooth speakers are optional
+- HTTPS connection (recommended for production)
+- Multiple devices (phones/tablets/computers)
+- Audio output device (speakers, headphones, etc.)
+- Network connectivity: Same Wi-Fi network OR same mobile hotspot
 
 ## Deployment
 
@@ -102,9 +123,9 @@ The app includes an Audio Output Selector that allows you to choose any audio ou
 
 ## Tech Stack
 
-- Next.js 14
-- TypeScript
+- Next.js 14 (JavaScript)
 - Socket.io for real-time synchronization
 - YouTube Player API
-- Web Bluetooth API
+- Audio Output API (where supported)
+- Mobile hotspot networking support
 

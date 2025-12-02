@@ -130,6 +130,19 @@ export default function ConnectionGuide({ onServerUrlChange }) {
                 <p className={styles.hint}>If this looks correct, use: <code>http://{localIp}:3001</code></p>
               </div>
             )}
+
+            <div className={styles.connectionOptions}>
+              <h4>📶 Alternative: Use Mobile Hotspot</h4>
+              <div className={styles.hotspotGuide}>
+                <p><strong>If Wi-Fi isn't available, use a mobile hotspot:</strong></p>
+                <ol>
+                  <li>One mobile device creates a hotspot (see setup below)</li>
+                  <li>Server computer connects to this hotspot</li>
+                  <li>Other mobile devices connect to the same hotspot</li>
+                  <li>Use the hotspot's IP address for connection</li>
+                </ol>
+              </div>
+            </div>
           </div>
 
           <div className={styles.step}>
@@ -179,9 +192,67 @@ export default function ConnectionGuide({ onServerUrlChange }) {
             <ul>
               <li><strong>Can&apos;t connect?</strong> Make sure the server is running and firewall allows port 3001</li>
               <li><strong>Not syncing?</strong> Check that all devices show &quot;&#128994; Syncing&quot; status</li>
-              <li><strong>Same network?</strong> All devices should be on the same Wi-Fi network for local connections</li>
+              <li><strong>Same network/hotspot:</strong> All devices must connect to same Wi-Fi network OR same mobile hotspot</li>
+              <li><strong>Mobile hotspot issues?</strong> Restart hotspot, check password, ensure all devices connect to hotspot Wi-Fi</li>
+              <li><strong>Hotspot IP:</strong> Use IP shown when connected to hotspot (usually 192.168.43.x or 172.20.10.x)</li>
               <li><strong>Firewall?</strong> Temporarily disable firewall or allow port 3001</li>
+              <li><strong>Connection drops?</strong> Hotspot connections may be less stable - refresh and reconnect if needed</li>
             </ul>
+          </div>
+
+          <div className={styles.hotspotSection}>
+            <h3>📶 Mobile Hotspot Alternative</h3>
+            <p><strong>When Wi-Fi isn't available, use a mobile hotspot:</strong></p>
+
+            <div className={styles.hotspotGuide}>
+              <div className={styles.hotspotMethod}>
+                <h4>🔥 How to Create Mobile Hotspot:</h4>
+
+                <div className={styles.platformInstructions}>
+                  <div className={styles.platform}>
+                    <h5>🍎 iOS (iPhone/iPad)</h5>
+                    <ol>
+                      <li>Settings → Personal Hotspot</li>
+                      <li>Turn ON "Allow Others to Join"</li>
+                      <li>Note the Wi-Fi password shown</li>
+                      <li>Hotspot Wi-Fi network is created</li>
+                    </ol>
+                  </div>
+
+                  <div className={styles.platform}>
+                    <h5>🤖 Android</h5>
+                    <ol>
+                      <li>Settings → Connections → Mobile Hotspot and Tethering</li>
+                      <li>Tap Mobile Hotspot</li>
+                      <li>Configure name and password</li>
+                      <li>Turn ON the hotspot</li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
+
+              <div className={styles.hotspotMethod}>
+                <h4>🔗 How to Connect Devices:</h4>
+                <ol>
+                  <li><strong>Server computer:</strong> Connect to the hotspot Wi-Fi network</li>
+                  <li><strong>Other devices:</strong> Connect to the same hotspot Wi-Fi network</li>
+                  <li><strong>Find IP:</strong> Check the IP assigned by hotspot (run ipconfig/ifconfig)</li>
+                  <li><strong>Use hotspot IP:</strong> Usually starts with 192.168.43.x or 172.20.10.x</li>
+                </ol>
+              </div>
+
+              <div className={styles.hotspotTips}>
+                <h4>💡 Hotspot Tips:</h4>
+                <ul>
+                  <li>📶 Stay close to hotspot device for best signal</li>
+                  <li>🔋 Hotspot drains battery faster - keep device charged</li>
+                  <li>👥 Most hotspots support 5-10 connected devices</li>
+                  <li>🌐 Monitor mobile data usage if not unlimited</li>
+                  <li>🔄 If connection drops, all devices need to reconnect</li>
+                  <li>🎵 Perfect for music sync, even with slower speeds!</li>
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
       )}

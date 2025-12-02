@@ -85,43 +85,34 @@ export default function AudioOutputSelector({ onDeviceChange }) {
           <p>On mobile devices, audio output is controlled by your device's system settings.</p>
 
           <div className={styles.mobileInstructions}>
-            <h5>How to connect Bluetooth speakers on {mobileOS}:</h5>
+            <h5>How to select audio output on {mobileOS}:</h5>
             {mobileOS === 'iOS' ? (
               <ol>
                 <li>Open <strong>Settings</strong> app</li>
-                <li>Tap <strong>Bluetooth</strong></li>
-                <li>Turn on Bluetooth if not already on</li>
-                <li>Put your Bluetooth speaker in pairing mode</li>
-                <li>Tap your speaker's name to connect</li>
-                <li>Go to <strong>Settings → Sound & Haptics</strong></li>
-                <li>Select your Bluetooth speaker as output</li>
+                <li>Go to <strong>Sounds & Haptics</strong></li>
+                <li>Select your preferred audio output device</li>
+                <li>Choose from available speakers, headphones, or Bluetooth devices</li>
               </ol>
             ) : mobileOS === 'Android' ? (
               <ol>
-                <li>Swipe down from top of screen (twice for full quick settings)</li>
-                <li>Tap the gear icon ⚙️ to open Settings</li>
-                <li>Tap <strong>Connected devices</strong> or <strong>Bluetooth & device connection</strong></li>
-                <li>Turn on Bluetooth if not already on</li>
-                <li>Put your Bluetooth speaker in pairing mode</li>
-                <li>Tap <strong>Pair new device</strong></li>
-                <li>Tap your speaker's name to connect</li>
-                <li>Audio will automatically route to connected Bluetooth device</li>
+                <li>Swipe down from the top of the screen</li>
+                <li>Tap the speaker icon or expand quick settings</li>
+                <li>Tap the audio output selector</li>
+                <li>Choose your preferred output device from the list</li>
               </ol>
             ) : (
               <ol>
                 <li>Open your device's Settings</li>
-                <li>Find Bluetooth settings</li>
-                <li>Turn on Bluetooth</li>
-                <li>Put your Bluetooth speaker in pairing mode</li>
-                <li>Connect to your speaker</li>
-                <li>The system will handle audio routing automatically</li>
+                <li>Find Sound or Audio settings</li>
+                <li>Select your preferred output device</li>
+                <li>Choose from available speakers or headphones</li>
               </ol>
             )}
           </div>
 
           <div className={styles.mobileNote}>
-            <p>💡 <strong>Tip:</strong> Once connected via Bluetooth, your phone/tablet will automatically play audio through the Bluetooth speaker.</p>
-            <p>🔄 <strong>Note:</strong> You may need to disconnect and reconnect Bluetooth devices occasionally for best performance.</p>
+            <p>💡 <strong>Tip:</strong> Your mobile device will automatically use the selected audio output for all playback.</p>
+            <p>🔊 <strong>Note:</strong> Make sure your preferred audio device is connected and selected in system settings.</p>
           </div>
         </div>
       ) : isSupported ? (
@@ -147,13 +138,13 @@ export default function AudioOutputSelector({ onDeviceChange }) {
         </div>
       ) : (
         <div className={styles.fallback}>
-          <p>Please select your Bluetooth speaker as the audio output device in your system settings.</p>
+          <p>Please select your preferred audio output device in your system settings.</p>
           <p className={styles.hint}>
             On Windows: Right-click speaker icon → Open Sound settings → Choose output device
             <br />
-            On Mac: System Preferences → Sound → Output → Select Bluetooth speaker
+            On Mac: System Preferences → Sound → Output → Select audio device
             <br />
-            On Mobile: Settings → Bluetooth → Select connected speaker
+            On Linux: Settings → Sound → Output → Choose device
           </p>
         </div>
       )}
@@ -161,15 +152,15 @@ export default function AudioOutputSelector({ onDeviceChange }) {
       <div className={styles.info}>
         {isMobile ? (
           <>
-            <p>🎵 <strong>Mobile Sync:</strong> Audio plays through your device's connected Bluetooth speaker automatically.</p>
+            <p>🎵 <strong>Mobile Sync:</strong> Audio plays through your device's selected output automatically.</p>
             <p>📱 <strong>Web Limitation:</strong> Mobile browsers don't allow programmatic audio device selection for security reasons.</p>
-            <p>🔗 <strong>System Control:</strong> Use your device's Bluetooth settings to connect speakers - the app will sync perfectly!</p>
+            <p>🔗 <strong>System Control:</strong> Use your device's audio settings to select speakers - the app will sync perfectly!</p>
           </>
         ) : (
           <>
-            <p>💡 Select any audio output device (Bluetooth speaker, built-in speakers, headphones, etc.)</p>
+            <p>💡 Select any audio output device (external speakers, built-in speakers, headphones, etc.)</p>
             <p>🔊 The selected device will be used for all audio playback</p>
-            <p>📱 <strong>No Bluetooth connection required</strong> - works with any available audio output</p>
+            <p>🎧 <strong>System Integration:</strong> Works with any audio device connected to your computer</p>
             {selectedDevice && selectedDevice !== 'default' && (
               <p className={styles.success}>✅ Audio is now routing to: {availableDevices.find(d => d.deviceId === selectedDevice)?.label || 'Selected device'}</p>
             )}
